@@ -39,7 +39,12 @@ function LoginForm() {
     setError('');
     setChecking(true);
     try {
-      const res = await fetch(`${API}/auth/check-email?email=${encodeURIComponent(email)}`);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`${API}/auth/check-email?email=${encodeURIComponent(email)}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
       const data = await res.json();
       if (!data.exists) {
         setError('No TimeSync account found for this email.');
@@ -47,7 +52,7 @@ function LoginForm() {
         return;
       }
     } catch {
-      setChecking(false);
+      // timeout or network error — proceed to Google anyway
     }
     window.location.href = `${API}/auth/google?login_hint=${encodeURIComponent(email)}`;
   };
