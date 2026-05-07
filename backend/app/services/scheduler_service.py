@@ -84,14 +84,14 @@ def run_reminder_job() -> dict:
 
 
 def run_weekly_summary_job() -> dict:
-    """Every Monday morning: post last week's hours summary to the shared Chat space."""
+    """Post current week's hours summary (Mon to today) to the shared Chat space."""
     from datetime import datetime
     from app.services.chat_service import send_weekly_summary
     from app.db.queries import get_weekly_hours_summary
 
     today      = datetime.now(_IST).date()
-    week_end   = today - timedelta(days=3)   # last Friday
-    week_start = week_end - timedelta(days=4) # last Monday
+    week_start = today - timedelta(days=today.weekday())  # Monday this week
+    week_end   = today
     print(f"[scheduler] Weekly summary: {week_start} → {week_end}")
 
     users_data = get_weekly_hours_summary(str(week_start), str(week_end))
@@ -125,24 +125,24 @@ def reschedule(morning_time: str = "09:30", evening_time: str = "22:00"):
     print(f"[scheduler] Jobs set — morning {morning_time} IST, evening {evening_time} IST")
 
 
-def reschedule_weekly(weekly_time: str = "09:30"):
+def reschedule_weekly(weekly_day: str = "mon", weekly_time: str = "09:00"):
     if scheduler.get_job("weekly_summary"):
         scheduler.remove_job("weekly_summary")
     wh, wm = _parse_time(weekly_time)
     scheduler.add_job(
         run_weekly_summary_job,
-        CronTrigger(day_of_week="mon", hour=wh, minute=wm, timezone=IST_TZ),
+        CronTrigger(day_of_week=weekly_day, hour=wh, minute=wm, timezone=IST_TZ),
         id="weekly_summary", replace_existing=True,
-        name=f"Weekly summary Monday {weekly_time} IST",
+        name=f"Weekly summary {weekly_day} {weekly_time} IST",
     )
-    print(f"[scheduler] Weekly summary job set — Monday {weekly_time} IST")
+    print(f"[scheduler] Weekly summary job set — {weekly_day} {weekly_time} IST")
 
 
 def start():
     from app.db.queries import get_notification_settings
     s = get_notification_settings()
     reschedule(s.get("morning_time", "09:30"), s.get("evening_time", "22:00"))
-    reschedule_weekly("09:30")
+    reschedule_weekly(s.get("weekly_day", "mon"), s.get("weekly_time", "09:00"))
     if not scheduler.running:
         scheduler.start()
     print("[scheduler] Started.")

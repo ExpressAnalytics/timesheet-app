@@ -652,6 +652,8 @@ export default function UserManagementPage() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [morningTime,     setMorningTime]     = useState('09:30');
   const [eveningTime,     setEveningTime]     = useState('22:00');
+  const [weeklyDay,       setWeeklyDay]       = useState('mon');
+  const [weeklyTime,      setWeeklyTime]      = useState('09:00');
   const [notifEnabled,    setNotifEnabled]    = useState(true);
   const [scheduleMsg,     setScheduleMsg]     = useState('');
   const [globalSaving,    setGlobalSaving]    = useState(false);
@@ -660,7 +662,15 @@ export default function UserManagementPage() {
     if (!token) return;
     fetch(`${API}/notifications/settings`, { headers: authHeaders(token) })
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d) { setMorningTime(d.morning_time); setEveningTime(d.evening_time); setNotifEnabled(d.enabled); } })
+      .then((d) => {
+        if (d) {
+          setMorningTime(d.morning_time);
+          setEveningTime(d.evening_time);
+          setNotifEnabled(d.enabled);
+          if (d.weekly_day)  setWeeklyDay(d.weekly_day);
+          if (d.weekly_time) setWeeklyTime(d.weekly_time);
+        }
+      })
       .catch(() => {});
   }, [token]);
 
@@ -684,7 +694,13 @@ export default function UserManagementPage() {
     setScheduleLoading(true); setScheduleMsg('');
     const res = await fetch(`${API}/notifications/settings`, {
       method: 'PUT', headers: authHeaders(token),
-      body: JSON.stringify({ morning_time: morningTime, evening_time: eveningTime, enabled: notifEnabled }),
+      body: JSON.stringify({
+        morning_time: morningTime,
+        evening_time: eveningTime,
+        enabled: notifEnabled,
+        weekly_day: weeklyDay,
+        weekly_time: weeklyTime,
+      }),
     });
     setScheduleLoading(false);
     setScheduleMsg(res.ok ? 'Schedule saved.' : 'Failed to save.');
@@ -697,16 +713,20 @@ export default function UserManagementPage() {
     const data = res.ok ? await res.json().catch(() => ({})) : {};
     if (!res.ok) {
       setScheduleMsg('Failed to trigger.');
-    } else if (data.reason === 'globally disabled') {
-      setScheduleMsg('Skipped — notifications are globally Off.');
-    } else if (data.reason === 'weekend') {
-      setScheduleMsg('Skipped — today is a weekend.');
     } else {
-      const parts = [];
-      if (data.sent  > 0) parts.push(`${data.sent} sent`);
-      if (data.failed > 0) parts.push(`${data.failed} failed (check Render logs)`);
-      if (data.skipped > 0) parts.push(`${data.skipped} already at 8h`);
-      setScheduleMsg(parts.length ? parts.join(' · ') : 'No eligible users found.');
+      const r = data.reminder ?? data;
+      const parts: string[] = [];
+      if (r.reason === 'globally disabled') parts.push('Reminders skipped — notifications Off');
+      else if (r.reason === 'weekend')      parts.push('Reminders skipped — weekend');
+      else {
+        if (r.sent    > 0) parts.push(`${r.sent} reminder(s) sent`);
+        if (r.failed  > 0) parts.push(`${r.failed} failed`);
+        if (r.skipped > 0) parts.push(`${r.skipped} already at 8h`);
+      }
+      const w = data.weekly;
+      if (w?.status === 'sent')   parts.push('weekly summary sent to group chat');
+      if (w?.status === 'failed') parts.push('weekly summary failed');
+      setScheduleMsg(parts.length ? parts.join(' · ') : 'Done.');
     }
     setTimeout(() => setScheduleMsg(''), 6000);
   };
@@ -845,6 +865,32 @@ export default function UserManagementPage() {
                     style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, colorScheme: t.colorScheme }} />
                   <p className="text-[11px]" style={{ color: t.textSubtle }}>IST</p>
                 </div>
+
+                {/* Weekly Reminder */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: t.textMuted }}>
+                    Weekly Reminder
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select value={weeklyDay} onChange={(e) => setWeeklyDay(e.target.value)}
+                      disabled={!notifEnabled}
+                      className="px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-40"
+                      style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text }}>
+                      {[
+                        ['mon','Monday'],['tue','Tuesday'],['wed','Wednesday'],
+                        ['thu','Thursday'],['fri','Friday'],['sat','Saturday'],['sun','Sunday'],
+                      ].map(([val, label]) => (
+                        <option key={val} value={val}>{label}</option>
+                      ))}
+                    </select>
+                    <input type="time" value={weeklyTime} onChange={(e) => setWeeklyTime(e.target.value)}
+                      disabled={!notifEnabled}
+                      className="px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-40"
+                      style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, colorScheme: t.colorScheme }} />
+                  </div>
+                  <p className="text-[11px]" style={{ color: t.textSubtle }}>Posts to group chat · IST</p>
+                </div>
+
                 <div className="flex items-center gap-2 pb-0.5 flex-wrap">
                   <button onClick={handleSaveSchedule} disabled={scheduleLoading}
                     className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"

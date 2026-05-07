@@ -17,37 +17,54 @@ async def get_settings(current_user: dict = Depends(get_current_user)):
     return queries.get_notification_settings()
 
 
+VALID_DAYS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+
 class NotificationSettingsBody(BaseModel):
     morning_time: str
     evening_time: str
     enabled: bool = True
+    weekly_day: str = "mon"
+    weekly_time: str = "09:00"
 
 
 @router.put("/settings")
 async def update_settings(body: NotificationSettingsBody, current_user: dict = Depends(get_current_user)):
     require_admin(current_user)
-    for t in (body.morning_time, body.evening_time):
+    for t in (body.morning_time, body.evening_time, body.weekly_time):
         parts = t.split(":")
         if len(parts) != 2 or not all(p.isdigit() for p in parts):
             raise HTTPException(status_code=400, detail=f"Invalid time format: {t}. Use HH:MM")
         if not (0 <= int(parts[0]) <= 23 and 0 <= int(parts[1]) <= 59):
             raise HTTPException(status_code=400, detail=f"Time out of range: {t}")
+    if body.weekly_day not in VALID_DAYS:
+        raise HTTPException(status_code=400, detail=f"Invalid day: {body.weekly_day}")
 
-    queries.save_notification_settings(body.morning_time, body.evening_time, body.enabled)
+    queries.save_notification_settings(
+        body.morning_time, body.evening_time, body.enabled,
+        body.weekly_day, body.weekly_time,
+    )
 
-    from app.services.scheduler_service import reschedule
+    from app.services.scheduler_service import reschedule, reschedule_weekly
     reschedule(body.morning_time, body.evening_time)
+    reschedule_weekly(body.weekly_day, body.weekly_time)
 
-    return {"status": "saved", "morning_time": body.morning_time, "evening_time": body.evening_time}
+    return {
+        "status": "saved",
+        "morning_time": body.morning_time,
+        "evening_time": body.evening_time,
+        "weekly_day": body.weekly_day,
+        "weekly_time": body.weekly_time,
+    }
 
 
 @router.post("/trigger")
 async def manual_trigger(current_user: dict = Depends(get_current_user)):
-    """Admin: fire the reminder job immediately and return real results."""
+    """Admin: fire the daily reminder + weekly summary immediately."""
     require_admin(current_user)
-    from app.services.scheduler_service import run_reminder_job
-    result = run_reminder_job()
-    return result
+    from app.services.scheduler_service import run_reminder_job, run_weekly_summary_job
+    reminder = run_reminder_job()
+    weekly   = run_weekly_summary_job()
+    return {"reminder": reminder, "weekly": weekly}
 
 
 @router.post("/trigger/weekly")

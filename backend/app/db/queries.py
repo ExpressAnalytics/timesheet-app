@@ -715,19 +715,25 @@ def toggle_all_email_notifications(enabled: bool):
 
 def get_notification_settings() -> Dict[str, Any]:
     row = execute_query("SELECT * FROM notification_settings WHERE id = 1", fetch_one=True)
-    return dict(row) if row else {"morning_time": "09:30", "evening_time": "22:00", "enabled": True}
+    return dict(row) if row else {
+        "morning_time": "09:30", "evening_time": "22:00", "enabled": True,
+        "weekly_day": "mon", "weekly_time": "09:00",
+    }
 
 
-def save_notification_settings(morning_time: str, evening_time: str, enabled: bool):
+def save_notification_settings(morning_time: str, evening_time: str, enabled: bool,
+                                weekly_day: str = "mon", weekly_time: str = "09:00"):
     execute_query(
-        """INSERT INTO notification_settings (id, morning_time, evening_time, enabled, updated_at)
-           VALUES (1, %s, %s, %s, CURRENT_TIMESTAMP)
+        """INSERT INTO notification_settings (id, morning_time, evening_time, enabled, weekly_day, weekly_time, updated_at)
+           VALUES (1, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
            ON CONFLICT (id) DO UPDATE
            SET morning_time = EXCLUDED.morning_time,
                evening_time = EXCLUDED.evening_time,
                enabled      = EXCLUDED.enabled,
+               weekly_day   = EXCLUDED.weekly_day,
+               weekly_time  = EXCLUDED.weekly_time,
                updated_at   = CURRENT_TIMESTAMP""",
-        (morning_time, evening_time, enabled), fetch_all=False,
+        (morning_time, evening_time, enabled, weekly_day, weekly_time), fetch_all=False,
     )
 
 
