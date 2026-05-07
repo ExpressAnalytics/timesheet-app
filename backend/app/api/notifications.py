@@ -63,7 +63,10 @@ async def manual_trigger(current_user: dict = Depends(get_current_user)):
     require_admin(current_user)
     from app.services.scheduler_service import run_reminder_job, run_weekly_summary_job
     reminder = run_reminder_job()
-    weekly   = run_weekly_summary_job()
+    try:
+        weekly = run_weekly_summary_job()
+    except Exception as e:
+        weekly = {"status": "failed", "error": str(e)}
     return {"reminder": reminder, "weekly": weekly}
 
 

@@ -92,7 +92,7 @@ def run_weekly_summary_job() -> dict:
     today      = datetime.now(_IST).date()
     week_start = today - timedelta(days=today.weekday())  # Monday this week
     week_end   = today
-    print(f"[scheduler] Weekly summary: {week_start} → {week_end}")
+    print(f"[scheduler] Weekly summary: {week_start} to {week_end}")
 
     users_data = get_weekly_hours_summary(str(week_start), str(week_end))
     ok = send_weekly_summary(str(week_start), str(week_end), users_data)
