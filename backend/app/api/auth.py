@@ -67,20 +67,36 @@ async def login(credentials: UserLogin, background_tasks: BackgroundTasks):
         "user": UserResponse(**db_user)
     }
 
+@router.get("/check-email")
+async def check_email(email: str = ""):
+    """Returns whether an email has a TimeSync account (used for pre-flight before Google OAuth)."""
+    if not email:
+        return {"exists": False}
+    user = find_user_by_email(email)
+    return {"exists": user is not None}
+
+
 @router.get("/google")
-async def google_login():
+async def google_login(login_hint: str = ""):
     """Redirect user to Google OAuth consent screen."""
     if not settings.GOOGLE_LOGIN_CLIENT_ID:
         raise HTTPException(status_code=501, detail="Google login not configured")
-    params = urllib.parse.urlencode({
+    oauth_params: dict = {
         "client_id":     settings.GOOGLE_LOGIN_CLIENT_ID,
         "redirect_uri":  settings.GOOGLE_LOGIN_REDIRECT_URI,
         "response_type": "code",
         "scope":         "openid email profile",
         "access_type":   "offline",
         "hd":            "expressanalytics.net",
-        "prompt":        "select_account",
-    })
+    }
+    if login_hint:
+        # Hint tells Google which account to target — no prompt so Google
+        # auto-signs in if that account is active, or shows sign-in form for it
+        oauth_params["login_hint"] = login_hint
+    else:
+        # No hint — show account chooser so user can pick from signed-in accounts
+        oauth_params["prompt"] = "select_account"
+    params = urllib.parse.urlencode(oauth_params)
     return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
 
 
