@@ -188,6 +188,168 @@ function JiraModal({ token, onClose }: { token: string; onClose: () => void }) {
   );
 }
 
+const TIMEZONES = [
+  'UTC-12:00','UTC-11:00','UTC-10:00','UTC-09:30','UTC-09:00','UTC-08:00',
+  'UTC-07:00','UTC-06:00','UTC-05:00','UTC-04:30','UTC-04:00','UTC-03:30',
+  'UTC-03:00','UTC-02:00','UTC-01:00','UTC+00:00','UTC+01:00','UTC+02:00',
+  'UTC+03:00','UTC+03:30','UTC+04:00','UTC+04:30','UTC+05:00','UTC+05:30',
+  'UTC+05:45','UTC+06:00','UTC+06:30','UTC+07:00','UTC+08:00','UTC+08:45',
+  'UTC+09:00','UTC+09:30','UTC+10:00','UTC+10:30','UTC+11:00','UTC+11:30',
+  'UTC+12:00','UTC+12:45','UTC+13:00','UTC+14:00',
+];
+
+function ExportModal({ token, onClose }: { token: string; onClose: () => void }) {
+  const today        = new Date().toISOString().slice(0, 10);
+  const firstOfMonth = today.slice(0, 8) + '01';
+  const [fromDate,  setFromDate]  = useState(firstOfMonth);
+  const [toDate,    setToDate]    = useState(today);
+  const [timezone,  setTimezone]  = useState('UTC+05:30');
+  const [exporting, setExporting] = useState(false);
+  const [error,     setError]     = useState('');
+
+  const handleExport = async () => {
+    if (!fromDate || !toDate) { setError('Please select both dates.'); return; }
+    if (fromDate > toDate)    { setError('From date must be before To date.'); return; }
+    setError('');
+    setExporting(true);
+    try {
+      const API = process.env.NEXT_PUBLIC_API_URL;
+      const res = await fetch(
+        `${API}/timesheet/export?from_date=${fromDate}&to_date=${toDate}&timezone=${encodeURIComponent(timezone)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (res.status === 404 || res.headers.get('content-type')?.includes('json')) {
+        const data = await res.json();
+        setError(data.detail || 'No entries found for the selected date range.');
+        setExporting(false);
+        return;
+      }
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const cd   = res.headers.get('content-disposition') ?? '';
+      const match = cd.match(/filename="(.+)"/);
+      const filename = match ? match[1] : `TimeSync_Export_${fromDate}_to_${toDate}.xlsx`;
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+      onClose();
+    } catch {
+      setError('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.45)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-sm rounded-2xl shadow-2xl flex flex-col"
+        style={{ background: '#fff', border: '1px solid #e4e4e7' }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}>
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="12" y1="18" x2="12" y2="12"/>
+                <line x1="9" y1="15" x2="15" y2="15"/>
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-[15px] font-semibold text-zinc-900">Export to Excel</h3>
+              <p className="text-[11px] text-zinc-500">Select a date range to export</p>
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          {/* Date range */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">From</label>
+              <input
+                type="date" value={fromDate}
+                onChange={(e) => { setFromDate(e.target.value); setError(''); }}
+                className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                style={{ background: '#f4f4f5', border: '1px solid #e4e4e7', color: '#18181b', colorScheme: 'light' }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">To</label>
+              <input
+                type="date" value={toDate}
+                onChange={(e) => { setToDate(e.target.value); setError(''); }}
+                className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                style={{ background: '#f4f4f5', border: '1px solid #e4e4e7', color: '#18181b', colorScheme: 'light' }}
+              />
+            </div>
+          </div>
+
+          {/* Timezone */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">Time Zone</label>
+            <select
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              style={{ background: '#f4f4f5', border: '1px solid #e4e4e7', color: '#18181b' }}
+            >
+              {TIMEZONES.map((tz) => (
+                <option key={tz} value={tz}>{tz}</option>
+              ))}
+            </select>
+          </div>
+
+          {error && (
+            <div className="px-3 py-2 rounded-lg text-xs font-medium"
+              style={{ background: 'rgba(185,28,28,0.08)', border: '1px solid rgba(185,28,28,0.3)', color: '#b91c1c' }}>
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={handleExport} disabled={exporting}
+            className="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-opacity disabled:opacity-50 hover:opacity-90 flex items-center justify-center gap-2"
+            style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)' }}
+          >
+            {exporting ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.3)" strokeWidth="2.5"/>
+                  <path d="M21 12a9 9 0 0 0-9-9" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+                </svg>
+                Exporting…
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Export
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router   = useRouter();
@@ -195,8 +357,9 @@ export default function Sidebar() {
   const token    = useAuthStore((s) => s.token) ?? '';
   const logout   = useAuthStore((s) => s.logout);
 
-  const [pendingCount,   setPendingCount]   = useState(0);
-  const [jiraModalOpen,  setJiraModalOpen]  = useState(false);
+  const [pendingCount,    setPendingCount]    = useState(0);
+  const [jiraModalOpen,   setJiraModalOpen]   = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const isManager = user?.role === 'teamlead' || user?.role === 'admin';
 
   // Fetch pending count for managers
@@ -375,7 +538,7 @@ export default function Sidebar() {
       </nav>
 
       {/* ── JIRA Integration ───────────────────────────────────────── */}
-      <div className="px-3 pb-2">
+      <div className="px-3 pb-1">
         <button
           onClick={() => setJiraModalOpen(true)}
           className="group w-full flex items-center gap-3 px-3 h-10 rounded-[10px] text-[13px] font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100/70 transition-colors duration-200"
@@ -387,6 +550,27 @@ export default function Sidebar() {
             </svg>
           </span>
           <span className="flex-1 text-left truncate">JIRA Integration</span>
+          <svg className="w-3.5 h-3.5 text-zinc-300 group-hover:text-zinc-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* ── Export to Excel ────────────────────────────────────────── */}
+      <div className="px-3 pb-2">
+        <button
+          onClick={() => setExportModalOpen(true)}
+          className="group w-full flex items-center gap-3 px-3 h-10 rounded-[10px] text-[13px] font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100/70 transition-colors duration-200"
+        >
+          <span className="flex items-center justify-center text-zinc-400 group-hover:text-[#16a34a] transition-colors duration-200">
+            <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+          </span>
+          <span className="flex-1 text-left truncate">Export to Excel</span>
           <svg className="w-3.5 h-3.5 text-zinc-300 group-hover:text-zinc-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
@@ -424,6 +608,9 @@ export default function Sidebar() {
 
     {jiraModalOpen && (
       <JiraModal token={token} onClose={() => setJiraModalOpen(false)} />
+    )}
+    {exportModalOpen && (
+      <ExportModal token={token} onClose={() => setExportModalOpen(false)} />
     )}
   </>
   );

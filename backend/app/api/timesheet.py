@@ -1,13 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from datetime import date, timedelta
 import datetime as _dt
 import calendar as _cal
+import io
 from collections import defaultdict
+from itertools import groupby
 from typing import Optional
 from pydantic import BaseModel
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
 from app.core.security import get_current_user
 from app.schemas.timesheet import TimesheetEntryCreate, TimesheetEntryResponse
 from app.db import queries
+
+_CATEGORY_MAP = {'HSB-7': 'Meeting', 'HSB-19': 'Others'}
+
+def _category(task_id: str) -> str:
+    return _CATEGORY_MAP.get(task_id, 'Development')
 
 
 def _get_min_allowed_date() -> date:
@@ -80,6 +90,73 @@ async def add_entry(body: TimesheetEntryCreate, current_user: dict = Depends(get
     if not row:
         raise HTTPException(status_code=500, detail="Failed to create entry")
     return dict(row)
+
+
+@router.get("/export")
+async def export_entries(
+    from_date: str,
+    to_date: str,
+    timezone: str = "UTC+05:30",
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate and stream an Excel file for the current user's entries in the date range."""
+    user_id  = current_user["sub"]
+    user_row = queries.get_user_by_id(user_id)
+    first_name = (user_row.get("full_name", "User").split()[0]) if user_row else "User"
+
+    rows = queries.get_entries_by_date_range(user_id, from_date, to_date)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "TimeSync Export"
+
+    # ── Headers ────────────────────────────────────────────────────
+    headers = [
+        "Calendar Week", "Date Started", "Time Started", "Time Zone",
+        "Task No", "Work Log Description", "Hours Spent", "Category", "Entered into Jira?",
+    ]
+    ws.append(headers)
+    header_font = Font(bold=True, size=14)
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 22
+
+    # ── Data rows grouped by date ──────────────────────────────────
+    sorted_rows = sorted(rows, key=lambda r: (str(r["entry_date"]), str(r.get("created_at", ""))))
+    for date_val, group in groupby(sorted_rows, key=lambda r: str(r["entry_date"])):
+        d = _dt.date.fromisoformat(date_val)
+        week_num = d.isocalendar()[1]
+        for entry in group:
+            ws.append([
+                week_num,
+                date_val,
+                "10:00",
+                timezone,
+                entry["task_id"],
+                entry["work_description"],
+                entry["hours"],
+                _category(entry["task_id"]),
+                "Yes",
+            ])
+        ws.append([""] * 9)  # blank separator row after each date group
+
+    # ── Column widths ──────────────────────────────────────────────
+    col_widths = [15, 14, 13, 13, 12, 55, 13, 14, 17]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[ws.cell(1, i).column_letter].width = w
+
+    # ── Stream ─────────────────────────────────────────────────────
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f"{first_name}_TimeSync_Export_{from_date}_to_{to_date}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 class EditEntryBody(BaseModel):

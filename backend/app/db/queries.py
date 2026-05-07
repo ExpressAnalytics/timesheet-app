@@ -354,6 +354,17 @@ def get_analytics_for_manager(manager_id: str, start_date: str, end_date: str) -
     return execute_query(query, (start_date, end_date) + tuple(subordinate_ids), fetch_all=True) or []
 
 
+def get_entries_by_date_range(user_id: str, from_date: str, to_date: str) -> list:
+    query = """
+        SELECT id, user_id, task_id, task_title, entry_date,
+               work_description, hours, status, rejection_reason, epic
+        FROM timesheet_entries
+        WHERE user_id = %s AND entry_date BETWEEN %s AND %s
+        ORDER BY entry_date ASC, created_at ASC
+    """
+    return execute_query(query, (user_id, from_date, to_date), fetch_all=True) or []
+
+
 def get_all_entries_for_user(user_id: str, status: str = None) -> list:
     """All timesheet entries for a user across all dates, newest first."""
     if status:
