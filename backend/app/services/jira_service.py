@@ -116,33 +116,19 @@ class JiraService:
         try:
             # Use email in JQL — works even when account_id is a fallback value
             jql = f'assignee = "{email}" AND statusCategory != Done ORDER BY updated DESC'
-            payload = {
-                "jql": jql,
-                "maxResults": 50,
-                "fields": [
-                    "summary", "status", "assignee",
-                    "customfield_10016",        # story points
-                    "customfield_10014",        # epic link (legacy key)
-                    "parent",                   # parent issue = epic in Jira Cloud v3
-                    "timeoriginalestimate",
-                    "timespent",
-                    "customfield_10020",        # sprint
-                ],
-            }
-            post_headers = {**self.headers, "Content-Type": "application/json"}
-            response = requests.post(
-                f"{self.base_url}/search/jql",
-                auth=self.auth,
-                headers=post_headers,
-                json=payload,
-                timeout=15,
-            )
-            if not response.ok:
-                print(f"Jira /search/jql failed: {response.status_code} {response.text[:200]}")
-                return []
+            fields = [
+                "summary", "status", "assignee",
+                "customfield_10016",        # story points
+                "customfield_10014",        # epic link (legacy key)
+                "parent",                   # parent issue = epic in Jira Cloud v3
+                "timeoriginalestimate",
+                "timespent",
+                "customfield_10020",        # sprint
+            ]
+            all_issues = self._fetch_paginated_jql(jql, fields, timeout=20)
 
             tasks = []
-            for issue in response.json().get("issues", []):
+            for issue in all_issues:
                 fields = issue.get("fields", {})
                 summary = fields.get("summary", "")
 

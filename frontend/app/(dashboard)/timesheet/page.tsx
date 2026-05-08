@@ -12,6 +12,12 @@ type JiraTask = JiraTaskCached;
 type Entry    = EntryCached;
 
 // ── 3-working-day helpers ─────────────────────────────────────────────────────
+// Returns YYYY-MM-DD in the user's local timezone (not UTC)
+function localDateStr(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function addWorkingDays(from: Date, n: number, direction: 1 | -1): string {
   let count = 0;
   const d = new Date(from);
@@ -20,7 +26,7 @@ function addWorkingDays(from: Date, n: number, direction: 1 | -1): string {
     const day = d.getDay();
     if (day !== 0 && day !== 6) count++;   // skip Sun(0) & Sat(6)
   }
-  return d.toISOString().split('T')[0];
+  return localDateStr(d);
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -244,7 +250,7 @@ export default function TimesheetPage() {
   const authUser = useAuthStore((s) => s.user);
   const isAdmin  = authUser?.role === 'admin';
   const myUserId = authUser?.id ?? '';
-  const today          = new Date().toISOString().split('T')[0];
+  const today          = localDateStr(new Date());
   // 3 working days back — undefined for admin (no restriction)
   const minAllowedDate = isAdmin ? undefined : addWorkingDays(new Date(), 3, -1);
 
