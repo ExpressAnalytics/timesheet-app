@@ -131,20 +131,18 @@ function AddUserModal({
             </div>
           </div>
 
-          {/* Reports To (not for admin) */}
-          {role !== 'admin' && (
-            <div>
-              <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>Reports To</label>
-              <select value={managerId} onChange={(e) => setManagerId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none"
-                style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text }}>
-                <option value="">— No manager (auto-approved) —</option>
-                {potentialManagers.map((m) => (
-                  <option key={m.user_id} value={m.user_id}>{m.full_name} ({m.role})</option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Reports To — all roles including admin can report to another admin or teamlead */}
+          <div>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>Reports To</label>
+            <select value={managerId} onChange={(e) => setManagerId(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none"
+              style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text }}>
+              <option value="">— No manager (auto-approved) —</option>
+              {potentialManagers.map((m) => (
+                <option key={m.user_id} value={m.user_id}>{m.full_name} ({m.role})</option>
+              ))}
+            </select>
+          </div>
 
           {error && (
             <p className="text-xs px-3 py-2 rounded"
@@ -267,20 +265,18 @@ function ConfigureModal({
             </div>
           </div>
 
-          {/* Manager dropdown (not for admin) */}
-          {role !== 'admin' && (
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: t.textMuted }}>Reports to</label>
-              <select value={managerId} onChange={(e) => setManagerId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none"
-                style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text }}>
-                <option value="">— No manager —</option>
-                {potentialManagers.map((m) => (
-                  <option key={m.user_id} value={m.user_id}>{m.full_name} ({m.role})</option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Manager dropdown — all roles can report to another admin or teamlead */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: t.textMuted }}>Reports to</label>
+            <select value={managerId} onChange={(e) => setManagerId(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none"
+              style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text }}>
+              <option value="">— No manager —</option>
+              {potentialManagers.map((m) => (
+                <option key={m.user_id} value={m.user_id}>{m.full_name} ({m.role})</option>
+              ))}
+            </select>
+          </div>
 
           {/* Resource assignment — for teamlead and admin */}
           {showResources && (
