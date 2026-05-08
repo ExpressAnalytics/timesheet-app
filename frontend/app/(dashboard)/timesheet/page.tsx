@@ -871,10 +871,7 @@ export default function TimesheetPage() {
                   placeholder="Describe what you worked on…"
                   rows={3}
                   className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none resize-none"
-                  style={{ background: t.inputBg, border: `1px solid ${newWork.trim().length > 0 && newWork.trim().length < 10 ? '#ef4444' : t.inputBorder}`, color: t.text }} />
-                {newWork.trim().length > 0 && newWork.trim().length < 10 && (
-                  <p className="mt-1 text-xs" style={{ color: '#ef4444' }}>Minimum 10 characters ({newWork.trim().length}/10)</p>
-                )}
+                  style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text }} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>
@@ -908,7 +905,7 @@ export default function TimesheetPage() {
             )}
             <div className="flex gap-3 pt-1">
               <button onClick={handleSaveEntry}
-                disabled={saving || newWork.trim().length < 10 || !newHours || overLimit}
+                disabled={saving || !newWork.trim() || !newHours || overLimit}
                 className="flex-1 py-2.5 rounded-lg text-white font-semibold text-sm transition-opacity hover:opacity-90 disabled:opacity-50"
                 style={{ background: 'linear-gradient(135deg,#2563eb,#1d4ed8)' }}>
                 {saving ? 'Saving…' : 'Save Entry'}
@@ -989,10 +986,7 @@ export default function TimesheetPage() {
                   <textarea value={editModalWork} onChange={(e) => setEditModalWork(e.target.value)}
                     rows={3}
                     className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none resize-none"
-                    style={{ background: t.inputBg, border: `1px solid ${editModalWork.trim().length > 0 && editModalWork.trim().length < 10 ? '#ef4444' : t.inputBorder}`, color: t.text }} />
-                  {editModalWork.trim().length > 0 && editModalWork.trim().length < 10 && (
-                    <p className="mt-1 text-xs" style={{ color: '#ef4444' }}>Minimum 10 characters ({editModalWork.trim().length}/10)</p>
-                  )}
+                    style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text }} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>
@@ -1019,7 +1013,7 @@ export default function TimesheetPage() {
 
               <div className="flex gap-3 pt-1">
                 <button onClick={handleEditModalSave}
-                  disabled={editModalSaving || editModalWork.trim().length < 10 || !editModalHours || overLimit}
+                  disabled={editModalSaving || !editModalWork.trim() || !editModalHours || overLimit}
                   className="flex-1 py-2.5 rounded-lg text-white font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
                   style={{ background: isResubmit ? '#7c3aed' : 'linear-gradient(135deg,#2563eb,#1d4ed8)' }}>
                   {editModalSaving ? 'Saving…' : isResubmit ? 'Save & Resubmit' : 'Save Changes'}
