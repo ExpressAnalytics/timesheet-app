@@ -27,6 +27,13 @@ async def get_all_users(current_user: dict = Depends(get_current_user)):
     return {"users": [dict(u) for u in queries.get_all_users_with_details()]}
 
 
+@router.get("/active")
+async def get_active_users(current_user: dict = Depends(get_current_user)):
+    """Any authenticated user — minimal list of active users for dropdowns."""
+    rows = queries.get_all_users()
+    return {"users": [dict(u) for u in rows]}
+
+
 @router.get("/subordinates")
 async def get_subordinates(current_user: dict = Depends(get_current_user)):
     """Return direct reports for current user (teamlead/admin)."""
