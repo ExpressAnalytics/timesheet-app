@@ -379,12 +379,10 @@ export default function TimesheetPage() {
     fetchEntries(selectedDate);      // always fresh — approval by another user changes status
     fetchTasks(undefined, true);     // force=true — bypass server cache so epic_name is always present
 
-    // Admin: pre-load full user list for the selector
-    if (isAdmin) {
-      fetch(`${API}/users/all`, { headers: authHeaders(token) })
-        .then((r) => r.ok ? r.json() : { users: [] })
-        .then((d) => setAdminUsers(d.users ?? []));
-    }
+    // All users need the user list — admins for the header selector, everyone for Assisted Task tab
+    fetch(`${API}/users/all`, { headers: authHeaders(token) })
+      .then((r) => r.ok ? r.json() : { users: [] })
+      .then((d) => setAdminUsers(d.users ?? []));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── admin: switch target user — refresh both entries AND tasks ──────────
