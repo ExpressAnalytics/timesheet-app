@@ -44,7 +44,8 @@ def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
 def get_entries_by_date(user_id: str, entry_date: str):
     query = """
         SELECT id, user_id, task_id, task_title, entry_date,
-               work_description, hours, status, rejection_reason, epic
+               work_description, hours, status, rejection_reason, epic,
+               is_assisted, assisted_user_id
         FROM timesheet_entries
         WHERE user_id = %s AND entry_date = %s
         ORDER BY created_at ASC
@@ -54,17 +55,21 @@ def get_entries_by_date(user_id: str, entry_date: str):
 
 def create_entry(user_id: str, task_id: str, task_title: str,
                  entry_date: str, work_description: str, hours: float,
-                 status: str = "pending", epic: str = None) -> Optional[Dict[str, Any]]:
+                 status: str = "pending", epic: str = None,
+                 is_assisted: bool = False, assisted_user_id: str = None) -> Optional[Dict[str, Any]]:
     import uuid
     entry_id = str(uuid.uuid4())[:12]
     insert_query = """
         INSERT INTO timesheet_entries
-            (id, user_id, task_id, task_title, entry_date, work_description, hours, status, epic, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            (id, user_id, task_id, task_title, entry_date, work_description, hours, status, epic,
+             is_assisted, assisted_user_id, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
     """
-    execute_query(insert_query, (entry_id, user_id, task_id, task_title, entry_date, work_description, hours, status, epic), fetch_all=False)
+    execute_query(insert_query, (entry_id, user_id, task_id, task_title, entry_date, work_description,
+                                 hours, status, epic, is_assisted, assisted_user_id), fetch_all=False)
     select_query = """
-        SELECT id, user_id, task_id, task_title, entry_date, work_description, hours, status, rejection_reason, epic
+        SELECT id, user_id, task_id, task_title, entry_date, work_description, hours, status,
+               rejection_reason, epic, is_assisted, assisted_user_id
         FROM timesheet_entries
         WHERE id = %s AND user_id = %s
     """

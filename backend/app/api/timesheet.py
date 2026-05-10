@@ -86,6 +86,8 @@ async def add_entry(body: TimesheetEntryCreate, current_user: dict = Depends(get
         hours=body.hours,
         status=initial_status,
         epic=body.epic,
+        is_assisted=body.is_assisted,
+        assisted_user_id=body.assisted_user_id,
     )
     if not row:
         raise HTTPException(status_code=500, detail="Failed to create entry")

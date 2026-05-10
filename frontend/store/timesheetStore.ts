@@ -33,6 +33,8 @@ export interface EntryCached {
   hours: number;
   status: string;
   rejection_reason: string | null;
+  is_assisted?: boolean;
+  assisted_user_id?: string | null;
 }
 
 interface TimesheetCache {

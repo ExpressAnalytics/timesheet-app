@@ -64,13 +64,19 @@ async def approve(entry_id: str, current_user: dict = Depends(get_current_user))
     try:
         if entry:
             e = dict(entry)
+            base_desc = e.get("work_description") or e.get("task_title") or e["task_id"]
+            # For assisted entries prefix the description so it shows in Jira under the task owner's issue
+            if e.get("is_assisted"):
+                desc = f"Assisted by {e.get('full_name', e['email'])}: {base_desc}"
+            else:
+                desc = base_desc
             jira_synced = jira_service.post_worklog(
                 email=e["email"],
                 token=e["jira_token"],
                 issue_key=e["task_id"],
                 entry_date=str(e["entry_date"]),
                 hours=float(e["hours"]),
-                description=e.get("work_description") or e.get("task_title") or e["task_id"],
+                description=desc,
             )
     except Exception as ex:
         print(f"approve JIRA sync error: {ex}")

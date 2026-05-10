@@ -109,6 +109,25 @@ async def get_my_tasks(
     return tasks
 
 
+@router.get("/tasks/assisted", response_model=list[JiraTask])
+async def get_assisted_tasks(
+    user_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Any logged-in user can fetch another user's tasks for the Assisted Task tab."""
+    target = queries.get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    tasks, active_keys = _fetch_tasks_cached(target["email"])
+    tasks = [t for t in tasks if t["key"] not in GENERAL_TASK_KEYS]
+    for task in tasks:
+        task["is_active_sprint"] = task["key"] in active_keys
+        task["logged_hours"] = 0.0  # show task owner's logged hours as 0 — assisted is separate
+
+    return tasks
+
+
 _ALL_TASKS_TTL = 300   # 5 minutes
 
 

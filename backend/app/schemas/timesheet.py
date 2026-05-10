@@ -10,7 +10,9 @@ class TimesheetEntryCreate(BaseModel):
     work_description: str
     hours: float
     target_user_id: Optional[str] = None   # admin only: log entry for another user
-    epic: Optional[str] = None              # Jira epic key
+    epic: Optional[str] = None
+    is_assisted: bool = False
+    assisted_user_id: Optional[str] = None  # user_id of the task owner
 
 
 class TimesheetEntryResponse(BaseModel):
@@ -27,6 +29,8 @@ class TimesheetEntryResponse(BaseModel):
     est_hours: Optional[float] = None
     total_logged: Optional[float] = None
     epic: Optional[str] = None
+    is_assisted: bool = False
+    assisted_user_id: Optional[str] = None
 
 
 class JiraTask(BaseModel):
