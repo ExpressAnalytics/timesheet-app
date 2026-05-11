@@ -229,7 +229,110 @@ def _html_email(name: str, today: str, today_hours: float, gaps: List[Dict]) -> 
 </html>"""
 
 
+def _html_email_morning(name: str, today_str: str, focus_day: Dict, remaining_gaps: List[Dict]) -> str:
+    from datetime import date, timedelta
+    today      = date.fromisoformat(today_str)
+    focus_date = date.fromisoformat(focus_day["date"])
+    if focus_date == today - timedelta(days=1):
+        short_ref   = f"yesterday ({focus_date.strftime('%d %b')})"
+        focus_label = focus_date.strftime("%a, %d %b %Y")
+    else:
+        short_ref   = f"{focus_date.strftime('%A')} ({focus_date.strftime('%d %b')})"
+        focus_label = focus_date.strftime("%A, %d %b %Y")
+
+    hrs          = focus_day["hours"]
+    focus_color  = "#dc2626" if hrs == 0 else "#d97706"
+    focus_status = f"{hrs}h logged" if hrs > 0 else "0h — not filled"
+    app_url      = "https://timesync.expressanalytics.com"
+
+    gap_rows = ""
+    for g in remaining_gaps:
+        d      = date.fromisoformat(g["date"])
+        label  = d.strftime("%a, %d %b %Y")
+        h      = g["hours"]
+        color  = "#dc2626" if h == 0 else "#d97706"
+        status = f"{h}h logged" if h > 0 else "0h — not filled"
+        gap_rows += f"""
+        <tr>
+          <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;color:#334155;">{label}</td>
+          <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;color:{color};font-weight:600;">{status}</td>
+          <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;color:#dc2626;font-weight:600;">
+            {f"Need {round(8 - h, 2)}h more" if h > 0 else "Need 8h"}
+          </td>
+        </tr>"""
+
+    gap_section = ""
+    if remaining_gaps:
+        gap_section = f"""
+        <div style="margin-top:24px;">
+          <p style="margin:0 0 10px;font-size:14px;font-weight:600;color:#334155;">
+            Other unfilled days ({len(remaining_gaps)})
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;font-size:13px;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:10px 16px;text-align:left;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;">Date</th>
+                <th style="padding:10px 16px;text-align:left;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;">Hours</th>
+                <th style="padding:10px 16px;text-align:left;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;">Action</th>
+              </tr>
+            </thead>
+            <tbody>{gap_rows}</tbody>
+          </table>
+        </div>"""
+
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+        <tr><td style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:28px 32px;border-radius:12px 12px 0 0;">
+          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.1em;color:rgba(255,255,255,0.7);text-transform:uppercase;">TimeSync · Express Analytics</p>
+          <h1 style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;">Timesheet Reminder</h1>
+        </td></tr>
+        <tr><td style="background:#ffffff;padding:28px 32px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;">
+          <p style="margin:0 0 6px;font-size:16px;font-weight:600;color:#0f172a;">Hi {name},</p>
+          <p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6;">
+            Please log at least <strong>8 hours</strong> for <strong>{short_ref}</strong>.
+          </p>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:4px;">
+            <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#64748b;text-transform:uppercase;">Focus Day</p>
+            <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">{focus_label}</p>
+            <p style="margin:4px 0 0;font-size:13px;color:{focus_color};font-weight:600;">{focus_status}</p>
+          </div>
+          {gap_section}
+          <div style="margin-top:28px;text-align:center;">
+            <a href="{app_url}/timesheet"
+              style="display:inline-block;padding:13px 32px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">
+              Open TimeSync &rarr;
+            </a>
+          </div>
+          <p style="margin:24px 0 0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.6;">
+            You can log time up to 3 working days back.<br>
+            To stop these reminders, ask your admin to disable email notifications for your account.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
 # ── Public entry point ───────────────────────────────────────────────────────────
+
+def send_timesheet_reminder_morning(to_email: str, name: str, today_str: str,
+                                     focus_day: Dict, remaining_gaps: List[Dict]) -> bool:
+    focus_date = focus_day["date"]
+    subject    = f"TimeSync Reminder — Please log hours for {date.fromisoformat(focus_date).strftime('%d %b %Y')}"
+    html       = _html_email_morning(name, today_str, focus_day, remaining_gaps)
+    if settings.GMAIL_SENDER_EMAIL:
+        ok = _send_via_gmail_api(to_email, subject, html)
+        if ok:
+            return True
+    return _send_via_smtp(to_email, subject, html)
+
 
 def send_timesheet_reminder(to_email: str, name: str, today_str: str,
                              today_hours: float, gaps: List[Dict]) -> bool:

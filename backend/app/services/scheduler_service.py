@@ -11,37 +11,110 @@ scheduler = BackgroundScheduler(timezone=IST_TZ)
 
 
 
-def run_reminder_job() -> dict:
-    """Check every active user with email enabled; send reminder if today < 8h.
-    Returns a summary dict with sent/skipped/failed counts."""
+def _scheduler_setup():
+    from app.db.queries import get_notification_settings, get_users_for_notification
+    from datetime import datetime
+    settings = get_notification_settings()
+    today    = datetime.now(_IST).date()
+    today_str = str(today)
+    if not settings.get("enabled", True):
+        return None, None, None, None
+    if today.weekday() >= 5:
+        return None, None, None, None
+    return settings, today, today_str, get_users_for_notification()
+
+
+def run_morning_job() -> dict:
+    """Morning 9am: focus on the most recent unfilled working day (up to yesterday).
+    Skip if all days since APP_START_DATE are filled."""
+    from datetime import datetime
+    from app.db.queries import get_unfilled_weekdays, get_notification_settings, execute_query
+    from app.services.email_service import send_timesheet_reminder_morning
+    from app.services.chat_service import send_dm_morning
+
+    settings = get_notification_settings()
+    if not settings.get("enabled", True):
+        print("[scheduler] Notifications globally disabled — skipping morning.")
+        return {"status": "skipped", "reason": "globally disabled", "sent": 0, "failed": 0, "skipped": 0}
+
+    today     = datetime.now(_IST).date()
+    today_str = str(today)
+    if today.weekday() >= 5:
+        print(f"[scheduler] Weekend ({today_str} IST) — skipping morning.")
+        return {"status": "skipped", "reason": "weekend", "sent": 0, "failed": 0, "skipped": 0}
+
+    yesterday = str(today - timedelta(days=1))
+    from app.db.queries import get_users_for_notification
+    users = get_users_for_notification()
+    print(f"[scheduler] Morning job: {len(users)} eligible users — {today_str}")
+
+    sent = failed = skipped = 0
+    errors = []
+
+    for user in users:
+        u = dict(user)
+        # All unfilled weekdays from app start up to yesterday
+        all_gaps = get_unfilled_weekdays(u["user_id"], APP_START_DATE, yesterday)
+
+        if not all_gaps:
+            skipped += 1
+            continue
+
+        # Most recent unfilled day = focus; everything older = context list
+        focus_day      = all_gaps[-1]   # list is sorted ASC → last = most recent
+        remaining_gaps = all_gaps[:-1]
+
+        email_ok = send_timesheet_reminder_morning(
+            to_email       = u["email"],
+            name           = u["full_name"],
+            today_str      = today_str,
+            focus_day      = focus_day,
+            remaining_gaps = remaining_gaps,
+        )
+        chat_ok = send_dm_morning(
+            user_email     = u["email"],
+            name           = u["full_name"],
+            today_str      = today_str,
+            focus_day      = focus_day,
+            remaining_gaps = remaining_gaps,
+        )
+        if email_ok or chat_ok:
+            sent += 1
+        else:
+            failed += 1
+            errors.append(u["email"])
+
+    print(f"[scheduler] Morning done — sent={sent}, skipped={skipped}, failed={failed}")
+    return {"status": "done", "sent": sent, "skipped": skipped, "failed": failed, "errors": errors}
+
+
+def run_evening_job() -> dict:
+    """Evening: check today's hours + gaps — unchanged from original behaviour."""
     from datetime import datetime
     from app.db.queries import (
         get_users_for_notification, get_unfilled_weekdays,
         get_notification_settings, execute_query,
     )
     from app.services.email_service import send_timesheet_reminder
+    from app.services.chat_service import send_dm
 
     settings = get_notification_settings()
     if not settings.get("enabled", True):
-        print("[scheduler] Notifications globally disabled — skipping.")
+        print("[scheduler] Notifications globally disabled — skipping evening.")
         return {"status": "skipped", "reason": "globally disabled", "sent": 0, "failed": 0, "skipped": 0}
 
-    # Use IST date so Render (UTC) doesn't trigger weekend check on Sunday UTC = Monday IST
     today     = datetime.now(_IST).date()
     today_str = str(today)
-
     if today.weekday() >= 5:
-        print(f"[scheduler] Weekend ({today_str} IST) — skipping.")
+        print(f"[scheduler] Weekend ({today_str} IST) — skipping evening.")
         return {"status": "skipped", "reason": "weekend", "sent": 0, "failed": 0, "skipped": 0}
 
     yesterday = str(today - timedelta(days=1))
     users     = get_users_for_notification()
-    print(f"[scheduler] Reminder job: {len(users)} eligible users — {today_str}")
+    print(f"[scheduler] Evening job: {len(users)} eligible users — {today_str}")
 
     sent = failed = skipped = 0
     errors = []
-
-    from app.services.chat_service import send_dm
 
     for user in users:
         u = dict(user)
@@ -52,11 +125,8 @@ def run_reminder_job() -> dict:
             (u["user_id"], today_str), fetch_one=True,
         )
         today_hours = float(dict(row)["h"]) if row else 0.0
-
-        # Gaps = any unfilled weekday from app start date up to (and including) yesterday
         gaps = get_unfilled_weekdays(u["user_id"], APP_START_DATE, yesterday)
 
-        # Skip only if today is fully logged AND there are no historical gaps
         if today_hours >= 8 and not gaps:
             skipped += 1
             continue
@@ -81,7 +151,7 @@ def run_reminder_job() -> dict:
             failed += 1
             errors.append(u["email"])
 
-    print(f"[scheduler] Done — sent={sent}, skipped={skipped}, failed={failed}")
+    print(f"[scheduler] Evening done — sent={sent}, skipped={skipped}, failed={failed}")
     return {"status": "done", "sent": sent, "skipped": skipped, "failed": failed, "errors": errors}
 
 
@@ -115,12 +185,12 @@ def reschedule(morning_time: str = "09:30", evening_time: str = "22:00"):
     eh, em = _parse_time(evening_time)
 
     scheduler.add_job(
-        run_reminder_job, CronTrigger(hour=mh, minute=mm, timezone=IST_TZ),
+        run_morning_job, CronTrigger(hour=mh, minute=mm, timezone=IST_TZ),
         id="reminder_morning", replace_existing=True,
         name=f"Morning reminder {morning_time} IST",
     )
     scheduler.add_job(
-        run_reminder_job, CronTrigger(hour=eh, minute=em, timezone=IST_TZ),
+        run_evening_job, CronTrigger(hour=eh, minute=em, timezone=IST_TZ),
         id="reminder_evening", replace_existing=True,
         name=f"Evening reminder {evening_time} IST",
     )

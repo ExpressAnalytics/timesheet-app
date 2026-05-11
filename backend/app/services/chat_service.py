@@ -78,6 +78,54 @@ def _dm_space_name(service, user_email: str) -> Optional[str]:
 
 # ── DM message card ──────────────────────────────────────────────────────────────
 
+def _focus_day_ref(today_str: str, focus_day: Dict):
+    """Return (short_ref, long_label) for the focus day.
+    'yesterday (11 May)' when it's the calendar day before today,
+    'Friday (15 May)' otherwise."""
+    from datetime import date, timedelta
+    today      = date.fromisoformat(today_str)
+    focus_date = date.fromisoformat(focus_day["date"])
+    if focus_date == today - timedelta(days=1):
+        short = f"yesterday ({focus_date.strftime('%d %b')})"
+        long  = f"Yesterday ({focus_date.strftime('%a, %d %b %Y')})"
+    else:
+        short = f"{focus_date.strftime('%A')} ({focus_date.strftime('%d %b')})"
+        long  = focus_date.strftime('%A, %d %b %Y')
+    return short, long
+
+
+def _dm_text_morning(name: str, today_str: str, focus_day: Dict, remaining_gaps: List[Dict]) -> str:
+    from datetime import date
+    short_ref, long_label = _focus_day_ref(today_str, focus_day)
+    hrs  = focus_day["hours"]
+    need = round(8 - hrs, 1)
+    if hrs == 0:
+        focus_line = f"🔴 {long_label}: 0h — not filled"
+    else:
+        focus_line = f"⚠️ {long_label}: {hrs}h logged (need {need}h more)"
+
+    gap_lines = ""
+    if remaining_gaps:
+        gap_lines = f"\n\n*Unfilled days ({len(remaining_gaps)}):*"
+        for g in remaining_gaps[:5]:
+            d     = date.fromisoformat(g["date"])
+            label = d.strftime("%a %d %b")
+            h     = g["hours"]
+            sym   = "⚠️" if h > 0 else "🔴"
+            gap_lines += f"\n{sym} {label}: {h}h (need {round(8 - h, 1)}h)"
+        if len(remaining_gaps) > 5:
+            gap_lines += f"\n_…and {len(remaining_gaps) - 5} more_"
+
+    app_url = "https://timesync.expressanalytics.com/timesheet"
+    return (
+        f"*Hi {name}!* 👋\n\n"
+        f"*TimeSync Reminder* — please log at least *8 hours* for {short_ref}.\n\n"
+        f"{focus_line}"
+        f"{gap_lines}\n\n"
+        f"👉 <{app_url}|Open TimeSync>"
+    )
+
+
 def _dm_text(name: str, today: str, today_hours: float, gaps: List[Dict]) -> str:
     today_label = date.fromisoformat(today).strftime("%a, %d %b %Y")
     if today_hours >= 8:
@@ -133,6 +181,28 @@ def send_dm(user_email: str, name: str, today: str,
         return True
     except Exception as e:
         print(f"[chat] DM failed for {user_email}: {type(e).__name__}: {e}")
+        return False
+
+
+def send_dm_morning(user_email: str, name: str, today_str: str,
+                    focus_day: Dict, remaining_gaps: List[Dict]) -> bool:
+    service = _get_chat_service()
+    if not service:
+        print("[chat] Service account not configured — skipping morning DM.")
+        return False
+    space_name = _dm_space_name(service, user_email)
+    if not space_name:
+        return False
+    text = _dm_text_morning(name, today_str, focus_day, remaining_gaps)
+    try:
+        service.spaces().messages().create(
+            parent=space_name,
+            body={"text": text},
+        ).execute()
+        print(f"[chat] Morning DM sent → {user_email}")
+        return True
+    except Exception as e:
+        print(f"[chat] Morning DM failed for {user_email}: {type(e).__name__}: {e}")
         return False
 
 

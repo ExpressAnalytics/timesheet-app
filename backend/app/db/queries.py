@@ -772,6 +772,7 @@ def get_weekly_hours_summary(week_start: str, week_end: str) -> list:
               AND te.entry_date BETWEEN %s AND %s
               AND te.status != 'rejected'
             WHERE u.is_active = true
+              AND COALESCE(u.email_notifications_enabled, true) = true
             GROUP BY u.user_id, u.full_name
             ORDER BY u.full_name""",
         (week_start, week_end), fetch_all=True,
