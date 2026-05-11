@@ -11,6 +11,8 @@ const GOOGLE_ERRORS: Record<string, string> = {
   wrong_domain:       'Only @expressanalytics.net Google accounts are allowed.',
   no_account:         'No TimeSync account found for this Google account.',
   google_not_enabled: 'Google sign-in is not enabled for your account.',
+  idle:               'You were logged out due to 2 hours of inactivity. Please log in again.',
+  session:            'Your session expired. Please log in again.',
 };
 
 function LoginForm() {
