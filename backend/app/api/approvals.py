@@ -50,8 +50,7 @@ async def approve(entry_id: str, current_user: dict = Depends(get_current_user))
     require_manager(current_user)
 
     entry = queries.get_entry_with_user(entry_id)
-    # Assisted entries use the service account — skip per-user token check
-    if entry and not dict(entry).get("is_assisted"):
+    if entry:
         err = _check_jira_token(dict(entry))
         if err:
             raise HTTPException(status_code=400, detail=err)
@@ -59,30 +58,22 @@ async def approve(entry_id: str, current_user: dict = Depends(get_current_user))
     queries.approve_entry(entry_id, current_user["sub"])
     queries.bust(f"pending:{current_user['sub']}")
 
-    # Post worklog to JIRA
+    # Post worklog to JIRA using the logger's own credentials.
+    # Assisted entries post to the task owner's issue under the assisting user's name.
     jira_synced = False
     try:
         if entry:
             e = dict(entry)
             base_desc = e.get("work_description") or e.get("task_title") or e["task_id"]
-            if e.get("is_assisted"):
-                # Assisted: post via service account (has access to all projects)
-                desc = f"Assisted by {e.get('full_name', e['email'])}: {base_desc}"
-                jira_synced = jira_service.post_worklog_as_service_account(
-                    issue_key=e["task_id"],
-                    entry_date=str(e["entry_date"]),
-                    hours=float(e["hours"]),
-                    description=desc,
-                )
-            else:
-                jira_synced = jira_service.post_worklog(
-                    email=e["email"],
-                    token=e["jira_token"],
-                    issue_key=e["task_id"],
-                    entry_date=str(e["entry_date"]),
-                    hours=float(e["hours"]),
-                    description=base_desc,
-                )
+            desc = f"Assisted by {e.get('full_name', e['email'])}: {base_desc}" if e.get("is_assisted") else base_desc
+            jira_synced = jira_service.post_worklog(
+                email=e["email"],
+                token=e["jira_token"],
+                issue_key=e["task_id"],
+                entry_date=str(e["entry_date"]),
+                hours=float(e["hours"]),
+                description=desc,
+            )
     except Exception as ex:
         print(f"approve JIRA sync error: {ex}")
 
@@ -124,10 +115,6 @@ async def approve_all(
     skipped_users: dict = {}   # user_id → {name, reason}
     for row in pending:
         e = dict(row)
-        # Assisted entries use the service account — never skip them for missing token
-        if e.get("is_assisted"):
-            valid_ids.append(e["id"])
-            continue
         err = _check_jira_token(e)
         if err:
             uid = e["user_id"]
@@ -136,35 +123,27 @@ async def approve_all(
         else:
             valid_ids.append(e["id"])
 
-    # Approve only entries with valid tokens (assisted always included)
     queries.approve_entries_by_ids(valid_ids, current_user["sub"])
     queries.bust(f"pending:{current_user['sub']}")
 
-    # Post worklogs for approved entries
+    # Post worklogs using each user's own credentials.
+    # Assisted entries post to the task owner's issue under the assisting user's name.
     synced = 0
     for row in pending:
         e = dict(row)
         if e["id"] not in valid_ids:
             continue
         try:
-            if e.get("is_assisted"):
-                base_desc = e.get("work_description") or e.get("task_title") or e["task_id"]
-                desc = f"Assisted by {e.get('full_name', e['email'])}: {base_desc}"
-                ok = jira_service.post_worklog_as_service_account(
-                    issue_key=e["task_id"],
-                    entry_date=str(e["entry_date"]),
-                    hours=float(e["hours"]),
-                    description=desc,
-                )
-            else:
-                ok = jira_service.post_worklog(
-                    email=e["email"],
-                    token=e["jira_token"],
-                    issue_key=e["task_id"],
-                    entry_date=str(e["entry_date"]),
-                    hours=float(e["hours"]),
-                    description=e.get("work_description") or e.get("task_title") or e["task_id"],
-                )
+            base_desc = e.get("work_description") or e.get("task_title") or e["task_id"]
+            desc = f"Assisted by {e.get('full_name', e['email'])}: {base_desc}" if e.get("is_assisted") else base_desc
+            ok = jira_service.post_worklog(
+                email=e["email"],
+                token=e["jira_token"],
+                issue_key=e["task_id"],
+                entry_date=str(e["entry_date"]),
+                hours=float(e["hours"]),
+                description=desc,
+            )
             if ok:
                 synced += 1
         except Exception as ex:
