@@ -99,9 +99,9 @@ function TaskTable({ tasks, onLog, simple = false, assistedMode = false, showAss
   const headers = simple
     ? ['Task No', 'Purpose', 'Status', '']
     : assistedMode
-    ? ['Task No', 'Description', 'Epic', 'Status', '']
+    ? ['Task No', 'Description', 'Project', 'Status', '']
     : [
-        'Task No', 'Description', 'Epic',
+        'Task No', 'Description', 'Project',
         ...(showAssignee ? ['Assignee'] : []),
         'SP', 'Est. Hours', 'Logged', 'Remaining', 'Progress', 'Status', '',
       ];
@@ -800,7 +800,7 @@ export default function TimesheetPage() {
               <Tab id="sprint"    label="Current Sprint"        count={sprintTasks.length} />
               <Tab id="available" label="Available Tasks"       count={availableTasks.length} />
               <Tab id="general"   label="General Purpose Tasks" count={activeGeneral.length} />
-              <Tab id="assisted"  label="Assisted Task"         count={assistTasks.length} />
+              <Tab id="assisted"  label="Book on Other Tasks"    count={assistTasks.length} />
             </div>
             <div className="flex items-center gap-2">
               <LastUpdated ts={tasksFetched} />
@@ -835,7 +835,6 @@ export default function TimesheetPage() {
               {!assistLoading && assistUserId && (() => {
                 const assistSprint    = assistTasks.filter((t) => t.is_active_sprint);
                 const assistAvailable = assistTasks.filter((t) => !t.is_active_sprint);
-                const selectedUser    = adminUsers.find((u) => u.user_id === assistUserId);
                 return (
                   <div className="space-y-6">
                     {/* Current Sprint section */}

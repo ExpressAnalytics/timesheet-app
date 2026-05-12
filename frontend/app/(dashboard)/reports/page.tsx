@@ -237,7 +237,7 @@ function SpaceDrillDown({ userId, startDate, endDate, token, sprintOnly }: {
                                 </span>
                               </div>
                             ) : (
-                              <span className="text-xs italic" style={{ color: t.textSubtle }}>No Epic</span>
+                              <span className="text-xs italic" style={{ color: t.textSubtle }}>No Project</span>
                             )}
 
                             <div className="ml-auto flex items-center gap-3 text-xs">
@@ -596,7 +596,7 @@ function EpicRow({ epic, isOpen, onToggle, openMembers, onToggleMember, openTask
               </span>
             </div>
           ) : (
-            <span className="text-sm italic" style={{ color: t.textSubtle }}>No Epic</span>
+            <span className="text-sm italic" style={{ color: t.textSubtle }}>No Project</span>
           )}
         </td>
 
@@ -947,7 +947,7 @@ function SpaceSection({
           <thead style={{ background: t.tableHead }}>
             <tr>
               <th className="w-8 px-4 py-3" />
-              {['Epic', 'Tasks', 'Est. Hours', 'Logged Hours', 'Progress', 'Members'].map((h) => (
+              {['Project', 'Tasks', 'Est. Hours', 'Logged Hours', 'Progress', 'Members'].map((h) => (
                 <th key={h} className="px-5 py-3 text-left font-semibold"
                   style={{ color: t.textHeader, borderBottom: t.border, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   {h}
@@ -1104,7 +1104,7 @@ function ProjectView({ token, startDate, endDate, sprintOnly, refreshKey, onFetc
       <div className="grid grid-cols-3 gap-5">
         {[
           { title: 'Active Spaces',      value: spaces.length,            color: 'rgba(59,130,246,0.15)'  },
-          { title: 'Total Epics',        value: totalEpics,               color: 'rgba(139,92,246,0.15)'  },
+          { title: 'Total Projects',      value: totalEpics,               color: 'rgba(139,92,246,0.15)'  },
           { title: 'Hours Logged',       value: `${totalLogged.toFixed(1)}h`, color: 'rgba(16,185,129,0.15)' },
         ].map((s) => (
           <div key={s.title} className="rounded-xl p-5 shadow-sm" style={{ background: t.statGrad, border: t.border }}>

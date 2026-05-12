@@ -254,7 +254,7 @@ function SpaceSection({ space, userColorMap, accent }: {
           <div className="flex items-center gap-5 px-6 py-2"
             style={{ borderTop: `1px solid ${accent}25`, borderBottom: `1px solid ${t.borderColor}`, background: t.tableHead }}>
             <div className="w-52 flex-shrink-0 text-xs font-semibold uppercase tracking-wider" style={{ color: t.textSubtle }}>
-              Epic / Project
+              Project
             </div>
             <div className="flex-1 text-xs font-semibold uppercase tracking-wider" style={{ color: t.textSubtle }}>
               Team Contribution — hover each bar for hours
@@ -491,8 +491,8 @@ export default function InsightsPage() {
             <div className="flex items-center gap-1 p-1 rounded-xl w-fit"
               style={{ background: t.tableHead, border: t.border }}>
               {([
-                { id: 'active',   label: 'Active Epics',    dot: '#10b981' },
-                { id: 'complete', label: 'Completed Epics',  dot: '#64748b' },
+                { id: 'active',   label: 'Active Projects',    dot: '#10b981' },
+                { id: 'complete', label: 'Completed Projects',  dot: '#64748b' },
               ] as { id: Tab; label: string; dot: string }[]).map(tb => (
                 <button key={tb.id} onClick={() => setTab(tb.id)}
                   className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all"

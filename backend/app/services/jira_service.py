@@ -115,7 +115,7 @@ class JiraService:
         """Fetch open Jira issues assigned to the user via /search/jql (POST)."""
         try:
             # Use email in JQL — works even when account_id is a fallback value
-            jql = f'assignee = "{email}" AND statusCategory != Done ORDER BY updated DESC'
+            jql = f'assignee = "{email}" AND statusCategory != Done AND issuetype not in ("Epic") ORDER BY updated DESC'
             fields = [
                 "summary", "status", "assignee",
                 "customfield_10016",        # story points
