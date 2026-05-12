@@ -78,7 +78,8 @@ def create_entry(user_id: str, task_id: str, task_title: str,
 
 
 def resubmit_entry(entry_id: str, user_id: str, work_description: str = None,
-                   hours: float = None, task_id: str = None, task_title: str = None):
+                   hours: float = None, task_id: str = None, task_title: str = None,
+                   start_time: str = None):
     """Resource edits a rejected entry and resubmits."""
     updates, params = ["status = 'pending'", "rejection_reason = NULL"], []
     if work_description is not None:
@@ -89,6 +90,7 @@ def resubmit_entry(entry_id: str, user_id: str, work_description: str = None,
         updates.append("task_id = %s"); params.append(task_id)
     if task_title is not None:
         updates.append("task_title = %s"); params.append(task_title)
+    updates.append("start_time = %s"); params.append(start_time)
     params += [entry_id, user_id]
     execute_query(
         f"UPDATE timesheet_entries SET {', '.join(updates)} WHERE id = %s AND user_id = %s",
@@ -102,28 +104,31 @@ def delete_entry(entry_id: str, user_id: str) -> bool:
     return True
 
 
-def edit_entry(entry_id: str, user_id: str, work_description: str, hours: float) -> Optional[Dict[str, Any]]:
+def edit_entry(entry_id: str, user_id: str, work_description: str, hours: float,
+               start_time: str = None) -> Optional[Dict[str, Any]]:
     """Resource/teamlead edits their own pending or resubmitted entry."""
+    updates = ["work_description = %s", "hours = %s", "start_time = %s"]
     execute_query(
-        """UPDATE timesheet_entries
-           SET work_description = %s, hours = %s
+        f"""UPDATE timesheet_entries
+           SET {', '.join(updates)}
            WHERE id = %s AND user_id = %s AND status IN ('pending', 'resubmitted')""",
-        (work_description, hours, entry_id, user_id), fetch_all=False,
+        (work_description, hours, start_time, entry_id, user_id), fetch_all=False,
     )
     return execute_query(
-        "SELECT id, user_id, task_id, task_title, entry_date, work_description, hours, status, rejection_reason, epic FROM timesheet_entries WHERE id = %s",
+        "SELECT id, user_id, task_id, task_title, entry_date, work_description, hours, status, rejection_reason, epic, start_time FROM timesheet_entries WHERE id = %s",
         (entry_id,), fetch_one=True,
     )
 
 
-def edit_entry_admin(entry_id: str, work_description: str, hours: float) -> Optional[Dict[str, Any]]:
+def edit_entry_admin(entry_id: str, work_description: str, hours: float,
+                     start_time: str = None) -> Optional[Dict[str, Any]]:
     """Admin edits any entry regardless of owner or status."""
     execute_query(
-        "UPDATE timesheet_entries SET work_description = %s, hours = %s WHERE id = %s",
-        (work_description, hours, entry_id), fetch_all=False,
+        "UPDATE timesheet_entries SET work_description = %s, hours = %s, start_time = %s WHERE id = %s",
+        (work_description, hours, start_time, entry_id), fetch_all=False,
     )
     return execute_query(
-        "SELECT id, user_id, task_id, task_title, entry_date, work_description, hours, status, rejection_reason, epic FROM timesheet_entries WHERE id = %s",
+        "SELECT id, user_id, task_id, task_title, entry_date, work_description, hours, status, rejection_reason, epic, start_time FROM timesheet_entries WHERE id = %s",
         (entry_id,), fetch_one=True,
     )
 

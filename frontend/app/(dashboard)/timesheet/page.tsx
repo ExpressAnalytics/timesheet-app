@@ -473,17 +473,21 @@ export default function TimesheetPage() {
   };
 
   // ── unified edit / resubmit modal ─────────────────────────────────────────
-  const [editModal,        setEditModal]        = useState<{ entry: Entry; task: JiraTask | null } | null>(null);
-  const [editModalWork,    setEditModalWork]    = useState('');
-  const [editModalHours,   setEditModalHours]   = useState('');
-  const [editModalSaving,  setEditModalSaving]  = useState(false);
-  const [editModalError,   setEditModalError]   = useState('');
+  const [editModal,          setEditModal]          = useState<{ entry: Entry; task: JiraTask | null } | null>(null);
+  const [editModalWork,      setEditModalWork]      = useState('');
+  const [editModalHours,     setEditModalHours]     = useState('');
+  const [editModalStartTime, setEditModalStartTime] = useState('');
+  const [editModalSaving,    setEditModalSaving]    = useState(false);
+  const [editModalError,     setEditModalError]     = useState('');
 
   const openEditModal = (entry: Entry) => {
     const task = [...activeTasks, ...activeGeneral].find((t) => t.key === entry.task_id) ?? null;
     setEditModal({ entry, task });
     setEditModalWork(entry.work_description);
     setEditModalHours(String(entry.hours));
+    // start_time comes as "HH:MM:SS" from DB — trim to "HH:MM" for the time input
+    const st = entry.start_time ?? '';
+    setEditModalStartTime(st ? st.slice(0, 5) : '');
     setEditModalError('');
   };
 
@@ -497,14 +501,15 @@ export default function TimesheetPage() {
       work_description: editModalWork.trim(),
       hours: parseFloat(editModalHours),
       is_resubmit: isResubmit,
+      start_time: editModalStartTime || null,
     };
     if (isViewingOther) body.for_user_id = targetUserId;
     try {
       const res = await fetch(url, { method: 'PUT', headers: authHeaders(token), body: JSON.stringify(body) });
       if (!res.ok) { setEditModalError(`Failed: ${await res.text()}`); return; }
       const patch = isResubmit
-        ? { work_description: editModalWork.trim(), hours: parseFloat(editModalHours), status: 'resubmitted', rejection_reason: null as null }
-        : { work_description: editModalWork.trim(), hours: parseFloat(editModalHours) };
+        ? { work_description: editModalWork.trim(), hours: parseFloat(editModalHours), status: 'resubmitted', rejection_reason: null as null, start_time: editModalStartTime || null }
+        : { work_description: editModalWork.trim(), hours: parseFloat(editModalHours), start_time: editModalStartTime || null };
       if (isViewingOther) {
         setAdminViewEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, ...patch } : e));
       } else {
@@ -1202,19 +1207,31 @@ export default function TimesheetPage() {
                     className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none resize-none"
                     style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text }} />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>
-                    Hours{maxCanLog != null && <span className="ml-2 font-normal text-xs" style={{ color: t.textSubtle }}>(max {maxCanLog.toFixed(1)}h)</span>}
-                  </label>
-                  <input type="number" min="0.25" step="0.25" value={editModalHours}
-                    onChange={(e) => setEditModalHours(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg text-sm font-mono focus:outline-none"
-                    style={{ background: t.inputBg, border: `1px solid ${overLimit ? '#ef4444' : t.inputBorder}`, color: t.text }} />
-                  {overLimit && (
-                    <p className="mt-1 text-xs" style={{ color: '#ef4444' }}>
-                      Exceeds max allowed ({maxCanLog!.toFixed(1)}h = {remainingH}h remaining + {extraH!.toFixed(1)}h extra)
-                    </p>
-                  )}
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>
+                      Hours{maxCanLog != null && <span className="ml-2 font-normal text-xs" style={{ color: t.textSubtle }}>(max {maxCanLog.toFixed(1)}h)</span>}
+                    </label>
+                    <input type="number" min="0.25" step="0.25" value={editModalHours}
+                      onChange={(e) => setEditModalHours(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-lg text-sm font-mono focus:outline-none"
+                      style={{ background: t.inputBg, border: `1px solid ${overLimit ? '#ef4444' : t.inputBorder}`, color: t.text }} />
+                    {overLimit && (
+                      <p className="mt-1 text-xs" style={{ color: '#ef4444' }}>
+                        Exceeds max allowed ({maxCanLog!.toFixed(1)}h = {remainingH}h remaining + {extraH!.toFixed(1)}h extra)
+                      </p>
+                    )}
+                  </div>
+                  <div style={{ width: 130 }}>
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>
+                      Start Time <span className="font-normal text-xs" style={{ color: t.textSubtle }}>(optional)</span>
+                    </label>
+                    <input type="time" value={editModalStartTime}
+                      onChange={(e) => setEditModalStartTime(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none font-mono"
+                      style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, colorScheme: t.colorScheme }} />
+                    <p className="mt-0.5 text-xs" style={{ color: t.textSubtle }}>Default: 11:00 AM</p>
+                  </div>
                 </div>
               </div>
 

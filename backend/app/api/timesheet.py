@@ -175,24 +175,25 @@ class ResubmitBody(BaseModel):
     task_title: Optional[str] = None
     for_user_id: Optional[str] = None
     is_resubmit: bool = False   # True = change status to resubmitted; False = keep status
+    start_time: Optional[str] = None
 
 
 @router.put("/entries/{entry_id}/resubmit")
 async def resubmit_entry(entry_id: str, body: ResubmitBody, current_user: dict = Depends(get_current_user)):
-    """Edit work_description and hours.
+    """Edit work_description, hours, and start_time.
     is_resubmit=True  → status → resubmitted (for rejected entries)
     is_resubmit=False → keep status unchanged (for pending/resubmitted edits)
     Admin can edit any entry regardless of status."""
     role = current_user.get("role", "resource")
 
     if role == "admin":
-        queries.edit_entry_admin(entry_id, body.work_description, body.hours)
+        queries.edit_entry_admin(entry_id, body.work_description, body.hours, body.start_time)
     else:
         user_id = current_user["sub"]
         if body.is_resubmit:
-            queries.resubmit_entry(entry_id, user_id, body.work_description, body.hours, body.task_id, body.task_title)
+            queries.resubmit_entry(entry_id, user_id, body.work_description, body.hours, body.task_id, body.task_title, body.start_time)
         else:
-            queries.edit_entry(entry_id, user_id, body.work_description, body.hours)
+            queries.edit_entry(entry_id, user_id, body.work_description, body.hours, body.start_time)
 
     return {"status": "ok"}
 
