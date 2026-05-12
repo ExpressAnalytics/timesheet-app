@@ -285,10 +285,14 @@ export default function TimesheetPage() {
   const [activeTab,      setActiveTab]      = useState<'sprint' | 'available' | 'general' | 'assisted'>('sprint');
 
   // ── assisted task tab ─────────────────────────────────────────────────────
-  const [assistUserId,   setAssistUserId]   = useState('');
-  const [assistTasks,    setAssistTasks]    = useState<JiraTask[]>([]);
-  const [assistLoading,  setAssistLoading]  = useState(false);
-  const [isAssisted,     setIsAssisted]     = useState(false);  // true when modal opened from assisted tab
+  const [assistUserId,         setAssistUserId]         = useState('');
+  const [assistTasks,          setAssistTasks]          = useState<JiraTask[]>([]);
+  const [assistLoading,        setAssistLoading]        = useState(false);
+  const [isAssisted,           setIsAssisted]           = useState(false);  // true when modal opened from assisted tab
+  const [assistTaskKey,        setAssistTaskKey]        = useState('');
+  const [assistSearchLoading,  setAssistSearchLoading]  = useState(false);
+  const [assistSearchedTask,   setAssistSearchedTask]   = useState<{ task: JiraTask; owner: { user_id: string; full_name: string; email: string } | null } | null>(null);
+  const [assistSearchError,    setAssistSearchError]    = useState('');
 
   // ── admin: log on behalf of another user ─────────────────────────────────
   interface AdminUser { user_id: string; email: string; full_name: string; role: string; }
@@ -417,6 +421,8 @@ export default function TimesheetPage() {
   };
 
   const fetchAssistTasks = async (uid: string) => {
+    // Clear search mode when using the dropdown
+    setAssistSearchedTask(null); setAssistTaskKey(''); setAssistSearchError('');
     if (!uid) { setAssistTasks([]); return; }
     setAssistLoading(true);
     try {
@@ -424,6 +430,27 @@ export default function TimesheetPage() {
       if (res.ok) setAssistTasks(await res.json());
     } catch (e) { console.error('assistTasks', e); }
     finally { setAssistLoading(false); }
+  };
+
+  const searchAssistTask = async () => {
+    const key = assistTaskKey.trim().toUpperCase();
+    if (!key) return;
+    // Clear dropdown mode when using search
+    setAssistUserId(''); setAssistTasks([]);
+    setAssistSearchLoading(true); setAssistSearchError(''); setAssistSearchedTask(null);
+    try {
+      const res = await fetch(`${API}/jira/task-by-key/${key}`, { headers: authHeaders(token) });
+      if (!res.ok) {
+        const text = await res.text();
+        setAssistSearchError(`Not found: ${text}`);
+        return;
+      }
+      const data = await res.json();
+      setAssistSearchedTask(data);
+      if (data.owner) setAssistUserId(data.owner.user_id);
+    } catch (e) {
+      setAssistSearchError(`Search failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally { setAssistSearchLoading(false); }
   };
 
   // ── row-level progress ────────────────────────────────────────────────────
@@ -491,16 +518,17 @@ export default function TimesheetPage() {
   };
 
   // ── log time modal ────────────────────────────────────────────────────────
-  const [addingTask, setAddingTask] = useState<JiraTask | null>(null);
-  const [logDate,    setLogDate]    = useState(today);
-  const [newWork,    setNewWork]    = useState('');
-  const [newHours,   setNewHours]   = useState('');
-  const [saving,     setSaving]     = useState(false);
-  const [saveError,  setSaveError]  = useState('');
+  const [addingTask,    setAddingTask]    = useState<JiraTask | null>(null);
+  const [logDate,       setLogDate]       = useState(today);
+  const [newWork,       setNewWork]       = useState('');
+  const [newHours,      setNewHours]      = useState('');
+  const [newStartTime,  setNewStartTime]  = useState('');
+  const [saving,        setSaving]        = useState(false);
+  const [saveError,     setSaveError]     = useState('');
 
   const openModal = (task: JiraTask, assisted = false) => {
     setIsAssisted(assisted);
-    setAddingTask(task); setLogDate(selectedDate); setNewWork(''); setNewHours(''); setSaveError('');
+    setAddingTask(task); setLogDate(selectedDate); setNewWork(''); setNewHours(''); setNewStartTime(''); setSaveError('');
   };
 
   const handleSaveEntry = async () => {
@@ -512,8 +540,9 @@ export default function TimesheetPage() {
         entry_date: logDate, work_description: newWork.trim(), hours: parseFloat(newHours),
         epic: addingTask.epic ?? null,
       };
+      if (newStartTime) body.start_time = newStartTime;
       if (isViewingOther) body.target_user_id = targetUserId;
-      if (isAssisted) { body.is_assisted = true; body.assisted_user_id = assistUserId; }
+      if (isAssisted) { body.is_assisted = true; body.assisted_user_id = assistUserId || null; }
 
       const res = await fetch(`${API}/timesheet/entries`, {
         method: 'POST', headers: authHeaders(token),
@@ -552,7 +581,7 @@ export default function TimesheetPage() {
           .then((d: { week_hours?: number }) => { if (d.week_hours != null) setWeekHours(d.week_hours); });
       }
 
-      setAddingTask(null); setNewWork(''); setNewHours(''); setIsAssisted(false);
+      setAddingTask(null); setNewWork(''); setNewHours(''); setNewStartTime(''); setIsAssisted(false);
     } catch (e: unknown) {
       setSaveError(`Network error: ${e instanceof Error ? e.message : String(e)}`);
     } finally { setSaving(false); }
@@ -712,7 +741,7 @@ export default function TimesheetPage() {
               <table className="w-full text-sm border-collapse" style={{ minWidth: 640 }}>
                 <thead style={{ background: t.tableHead }}>
                   <tr>
-                    {['Task No', 'Description', 'Work Done', 'Hours', 'Status', 'Actions'].map((h) => (
+                    {['Task No', 'Description', 'Work Done', 'Hours', 'Start Time', 'Status', 'Actions'].map((h) => (
                       <th key={h} className="px-4 py-3.5 text-left font-semibold"
                         style={{ color: t.textHeader, borderBottom: t.border, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         {h}
@@ -750,6 +779,13 @@ export default function TimesheetPage() {
                         )}
                       </td>
                       <td className="px-4 py-4 font-mono font-semibold" style={{ color: t.text }}>{entry.hours}h</td>
+                      <td className="px-4 py-4 font-mono text-xs" style={{ color: entry.start_time ? t.textBody : t.textSubtle }}>
+                        {entry.start_time ? (() => {
+                          const [h, m] = entry.start_time.split(':');
+                          const hr = parseInt(h, 10);
+                          return `${hr % 12 || 12}:${m} ${hr >= 12 ? 'PM' : 'AM'}`;
+                        })() : '—'}
+                      </td>
                       <td className="px-4 py-4"><ApprovalBadge status={entry.status ?? 'pending'} /></td>
                       <td className="px-4 py-4">
                         {rl ? (
@@ -815,20 +851,79 @@ export default function TimesheetPage() {
 
           {activeTab === 'assisted' ? (
             <div className="space-y-5">
-              {/* user picker */}
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-medium flex-shrink-0" style={{ color: t.textMuted }}>Select user to assist:</label>
-                <select
-                  value={assistUserId}
-                  onChange={(e) => { setAssistUserId(e.target.value); fetchAssistTasks(e.target.value); }}
-                  className="px-3 py-2 rounded-lg text-sm focus:outline-none"
-                  style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, minWidth: 220 }}>
-                  <option value="">— Select a user —</option>
-                  {adminUsers.filter((u) => u.user_id !== myUserId).map((u) => (
-                    <option key={u.user_id} value={u.user_id}>{u.full_name}</option>
-                  ))}
-                </select>
+              {/* user picker + task search */}
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Mode A — select user */}
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium flex-shrink-0" style={{ color: t.textMuted }}>Select user:</label>
+                  <select
+                    value={assistUserId}
+                    onChange={(e) => { setAssistUserId(e.target.value); fetchAssistTasks(e.target.value); }}
+                    className="px-3 py-2 rounded-lg text-sm focus:outline-none"
+                    style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, minWidth: 200 }}>
+                    <option value="">— Select a user —</option>
+                    {adminUsers.filter((u) => u.user_id !== myUserId).map((u) => (
+                      <option key={u.user_id} value={u.user_id}>{u.full_name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <span className="text-xs font-semibold px-2" style={{ color: t.textSubtle }}>OR</span>
+
+                {/* Mode B — search by task key */}
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium flex-shrink-0" style={{ color: t.textMuted }}>Enter Task No:</label>
+                  <input
+                    type="text"
+                    value={assistTaskKey}
+                    onChange={(e) => setAssistTaskKey(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && searchAssistTask()}
+                    placeholder="e.g. OTD-5"
+                    className="px-3 py-2 rounded-lg text-sm focus:outline-none font-mono uppercase"
+                    style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, width: 140 }}
+                  />
+                  <button
+                    onClick={searchAssistTask}
+                    disabled={assistSearchLoading || !assistTaskKey.trim()}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    style={{ background: 'linear-gradient(135deg,#2563eb,#1d4ed8)' }}>
+                    {assistSearchLoading ? 'Searching…' : 'Search'}
+                  </button>
+                </div>
               </div>
+
+              {/* Search error */}
+              {assistSearchError && (
+                <div className="px-3 py-2 rounded-lg text-xs"
+                  style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: '#dc2626' }}>
+                  {assistSearchError}
+                </div>
+              )}
+
+              {/* Search result — single task */}
+              {assistSearchedTask && (() => {
+                const task = { ...assistSearchedTask.task, is_active_sprint: false };
+                const owner = assistSearchedTask.owner;
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm" style={{ color: t.textMuted }}>
+                      <span>Task found:</span>
+                      {owner ? (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                          style={{ background: 'rgba(16,185,129,0.12)', color: '#059669' }}>
+                          Owner: {owner.full_name}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                          style={{ background: 'rgba(245,158,11,0.12)', color: '#d97706' }}>
+                          Owner not in system — log will not link to a user
+                        </span>
+                      )}
+                    </div>
+                    <TaskTable tasks={[task]} onLog={(t) => openModal(t, true)} loggedKeys={new Set()} assistedMode />
+                  </div>
+                );
+              })()}
 
               {assistLoading && <div className="text-center py-8" style={{ color: t.textSubtle }}>Loading tasks…</div>}
 
@@ -869,8 +964,8 @@ export default function TimesheetPage() {
                 );
               })()}
 
-              {!assistLoading && !assistUserId && (
-                <div className="text-center py-10" style={{ color: t.textSubtle }}>Select a user above to see their tasks.</div>
+              {!assistLoading && !assistUserId && !assistSearchedTask && (
+                <div className="text-center py-10" style={{ color: t.textSubtle }}>Select a user or enter a task number above.</div>
               )}
             </div>
           ) : loadingTasks ? (
@@ -902,7 +997,10 @@ export default function TimesheetPage() {
         const maxAdditional = (!isAssisted && remainingH != null) ? remainingH + extraH! : null;
         const enteredH    = parseFloat(newHours) || 0;
         const overLimit   = !isAssisted && maxAdditional != null && enteredH > maxAdditional;
-        const assistedUser = isAssisted ? adminUsers.find((u) => u.user_id === assistUserId) : null;
+        const assistedUser = isAssisted
+          ? (adminUsers.find((u) => u.user_id === assistUserId)
+              ?? (assistSearchedTask?.owner?.user_id === assistUserId ? assistSearchedTask.owner : null))
+          : null;
 
         return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -916,7 +1014,7 @@ export default function TimesheetPage() {
                   {isAssisted && (
                     <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
                       style={{ background: 'rgba(234,179,8,0.15)', color: '#ca8a04' }}>
-                      Assisting {assistedUser?.full_name ?? ''}
+                      Assisting {assistedUser?.full_name ?? assistSearchedTask?.task.assignee ?? '—'}
                     </span>
                   )}
                 </div>
@@ -959,14 +1057,27 @@ export default function TimesheetPage() {
             )}
 
             <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>Date</label>
-                <input type="date" value={logDate}
-                  min={minAllowedDate}
-                  max={isAdmin ? undefined : today}
-                  onChange={(e) => setLogDate(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none"
-                  style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, colorScheme: t.colorScheme }} />
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>Date</label>
+                  <input type="date" value={logDate}
+                    min={minAllowedDate}
+                    max={isAdmin ? undefined : today}
+                    onChange={(e) => setLogDate(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none"
+                    style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, colorScheme: t.colorScheme }} />
+                </div>
+                <div style={{ width: 130 }}>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>
+                    Start Time <span className="font-normal text-xs" style={{ color: t.textSubtle }}>(optional)</span>
+                  </label>
+                  <input type="time" value={newStartTime}
+                    onChange={(e) => setNewStartTime(e.target.value)}
+                    placeholder="11:00"
+                    className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none font-mono"
+                    style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, colorScheme: t.colorScheme }} />
+                  <p className="mt-0.5 text-xs" style={{ color: t.textSubtle }}>Default: 11:00 AM</p>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>Work done</label>

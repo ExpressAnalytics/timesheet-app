@@ -109,6 +109,28 @@ async def get_my_tasks(
     return tasks
 
 
+@router.get("/task-by-key/{task_key}")
+async def get_task_by_key(task_key: str, current_user: dict = Depends(get_current_user)):
+    """Fetch a single Jira task by key (any project) and find its owner in the app's user DB."""
+    key = task_key.strip().upper()
+    task = jira_service.get_task_by_key(key)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task {key} not found in Jira")
+
+    assignee_email = task.get("assignee_email")
+    owner = None
+    if assignee_email:
+        u = queries.find_user_by_email(assignee_email)
+        if u:
+            owner = {
+                "user_id":   u["user_id"],
+                "full_name": u["full_name"],
+                "email":     u["email"],
+            }
+
+    return {"task": task, "owner": owner}
+
+
 @router.get("/tasks/assisted", response_model=list[JiraTask])
 async def get_assisted_tasks(
     user_id: str,

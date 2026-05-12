@@ -73,6 +73,7 @@ async def approve(entry_id: str, current_user: dict = Depends(get_current_user))
                 entry_date=str(e["entry_date"]),
                 hours=float(e["hours"]),
                 description=desc,
+                start_time=e.get("start_time"),
             )
     except Exception as ex:
         print(f"approve JIRA sync error: {ex}")
@@ -143,6 +144,7 @@ async def approve_all(
                 entry_date=str(e["entry_date"]),
                 hours=float(e["hours"]),
                 description=desc,
+                start_time=e.get("start_time"),
             )
             if ok:
                 synced += 1

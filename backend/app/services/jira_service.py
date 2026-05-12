@@ -488,6 +488,55 @@ class JiraService:
         return {}
 
 
+    def get_task_by_key(self, key: str) -> Optional[Dict[str, Any]]:
+        """Fetch a single Jira issue by key using the service account. Returns task dict or None."""
+        import re as _re
+        try:
+            r = requests.get(
+                f"{self.base_url}/issue/{key}",
+                auth=self.auth,
+                headers=self.headers,
+                params={"fields": "summary,status,assignee,customfield_10016,customfield_10014,parent"},
+                timeout=10,
+            )
+            if not r.ok:
+                print(f"get_task_by_key({key}) failed: {r.status_code} {r.text[:200]}")
+                return None
+            issue = r.json()
+            fields = issue.get("fields", {})
+            summary = fields.get("summary", "")
+
+            sp = fields.get("customfield_10016") or fields.get("customfield_10028")
+            if sp is None:
+                m = _re.search(r':\s*(\d+(?:\.\d+)?)\s*$', summary)
+                if m:
+                    sp = float(m.group(1))
+            est_hours = round(sp * 8, 2) if sp is not None else None
+
+            parent = fields.get("parent") or {}
+            epic_key  = parent.get("key") or fields.get("customfield_10014")
+            epic_name = (parent.get("fields") or {}).get("summary")
+            assignee_field = fields.get("assignee") or {}
+
+            return {
+                "id":               issue["id"],
+                "key":              issue["key"],
+                "title":            summary,
+                "epic":             epic_key,
+                "epic_name":        epic_name,
+                "story_points":     sp,
+                "est_hours":        est_hours,
+                "logged_hours":     0,
+                "status":           fields.get("status", {}).get("name", "Unknown"),
+                "sprint":           None,
+                "is_active_sprint": False,
+                "assignee":         assignee_field.get("displayName"),
+                "assignee_email":   assignee_field.get("emailAddress"),
+            }
+        except Exception as e:
+            print(f"get_task_by_key({key}) error: {e}")
+            return None
+
     def post_worklog(
         self,
         email: str,
@@ -496,12 +545,17 @@ class JiraService:
         entry_date: str,   # YYYY-MM-DD
         hours: float,
         description: str,
+        start_time: Optional[str] = None,  # HH:MM, defaults to 11:00 IST
     ) -> bool:
         """POST a worklog to JIRA using the user's own credentials.
         Returns True on success, False on any failure."""
         try:
             auth = HTTPBasicAuth(email, token)
-            started = f"{entry_date}T09:00:00.000+0000"
+            t = start_time or "11:00"
+            parts = t.split(":")
+            hh = parts[0].zfill(2) if parts else "11"
+            mm = parts[1].zfill(2) if len(parts) > 1 else "00"
+            started = f"{entry_date}T{hh}:{mm}:00.000+0530"
             body = {
                 "timeSpentSeconds": int(hours * 3600),
                 "started": started,

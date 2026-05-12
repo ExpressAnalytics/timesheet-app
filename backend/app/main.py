@@ -73,6 +73,9 @@ async def run_migrations():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS jira_token VARCHAR",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS jira_token_expires_at DATE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_notifications_enabled BOOLEAN DEFAULT true",
+        "ALTER TABLE timesheet_entries ADD COLUMN IF NOT EXISTS is_assisted BOOLEAN DEFAULT false",
+        "ALTER TABLE timesheet_entries ADD COLUMN IF NOT EXISTS assisted_user_id VARCHAR(20)",
+        "ALTER TABLE timesheet_entries ADD COLUMN IF NOT EXISTS start_time TIME",
         """CREATE TABLE IF NOT EXISTS notification_settings (
             id INTEGER PRIMARY KEY DEFAULT 1,
             morning_time VARCHAR(5) DEFAULT '09:30',

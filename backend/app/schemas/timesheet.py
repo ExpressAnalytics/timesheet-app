@@ -13,6 +13,7 @@ class TimesheetEntryCreate(BaseModel):
     epic: Optional[str] = None
     is_assisted: bool = False
     assisted_user_id: Optional[str] = None  # user_id of the task owner
+    start_time: Optional[str] = None        # HH:MM, used as worklog start time on approval
 
 
 class TimesheetEntryResponse(BaseModel):
@@ -31,6 +32,7 @@ class TimesheetEntryResponse(BaseModel):
     epic: Optional[str] = None
     is_assisted: bool = False
     assisted_user_id: Optional[str] = None
+    start_time: Optional[str] = None
 
 
 class JiraTask(BaseModel):

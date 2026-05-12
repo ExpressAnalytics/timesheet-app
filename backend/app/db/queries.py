@@ -45,7 +45,7 @@ def get_entries_by_date(user_id: str, entry_date: str):
     query = """
         SELECT id, user_id, task_id, task_title, entry_date,
                work_description, hours, status, rejection_reason, epic,
-               is_assisted, assisted_user_id
+               is_assisted, assisted_user_id, start_time
         FROM timesheet_entries
         WHERE user_id = %s AND entry_date = %s
         ORDER BY created_at ASC
@@ -56,20 +56,21 @@ def get_entries_by_date(user_id: str, entry_date: str):
 def create_entry(user_id: str, task_id: str, task_title: str,
                  entry_date: str, work_description: str, hours: float,
                  status: str = "pending", epic: str = None,
-                 is_assisted: bool = False, assisted_user_id: str = None) -> Optional[Dict[str, Any]]:
+                 is_assisted: bool = False, assisted_user_id: str = None,
+                 start_time: str = None) -> Optional[Dict[str, Any]]:
     import uuid
     entry_id = str(uuid.uuid4())[:12]
     insert_query = """
         INSERT INTO timesheet_entries
             (id, user_id, task_id, task_title, entry_date, work_description, hours, status, epic,
-             is_assisted, assisted_user_id, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+             is_assisted, assisted_user_id, start_time, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
     """
     execute_query(insert_query, (entry_id, user_id, task_id, task_title, entry_date, work_description,
-                                 hours, status, epic, is_assisted, assisted_user_id), fetch_all=False)
+                                 hours, status, epic, is_assisted, assisted_user_id, start_time), fetch_all=False)
     select_query = """
         SELECT id, user_id, task_id, task_title, entry_date, work_description, hours, status,
-               rejection_reason, epic, is_assisted, assisted_user_id
+               rejection_reason, epic, is_assisted, assisted_user_id, start_time
         FROM timesheet_entries
         WHERE id = %s AND user_id = %s
     """
@@ -666,7 +667,7 @@ def get_pending_entries_with_tokens(manager_id: str = None, entry_date: str = No
     where = " AND ".join(conditions)
     return execute_query(
         f"""SELECT te.id, te.user_id, te.task_id, te.entry_date, te.hours,
-                   te.work_description, te.task_title,
+                   te.work_description, te.task_title, te.is_assisted, te.start_time,
                    u.full_name, u.email, u.jira_token, u.jira_token_expires_at
               FROM timesheet_entries te
               JOIN users u ON u.user_id = te.user_id
