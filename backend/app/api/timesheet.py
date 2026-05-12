@@ -131,10 +131,12 @@ async def export_entries(
         d = _dt.date.fromisoformat(date_val)
         week_num = d.isocalendar()[1]
         for entry in group:
+            st = entry.get("start_time")
+            time_str = st.strftime("%H:%M") if st else "11:00"
             ws.append([
                 week_num,
                 date_val,
-                "10:00",
+                time_str,
                 timezone,
                 entry["task_id"],
                 entry["work_description"],
