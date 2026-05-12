@@ -14,7 +14,7 @@ interface CalEvent {
 }
 interface JiraTask { key: string; title: string; }
 interface EventRow extends CalEvent {
-  hours: string; description: string; task_key: string; deleted: boolean;
+  hours: string; description: string; task_key: string; deleted: boolean; start_time: string;
 }
 
 const DEFAULT_GENERAL: JiraTask[] = [
@@ -29,6 +29,12 @@ const DEFAULT_GENERAL: JiraTask[] = [
 function fmt(iso: string) {
   try { return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }); }
   catch { return iso; }
+}
+function toHHMM(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  } catch { return '11:00'; }
 }
 function aH(token: string) {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -75,6 +81,7 @@ export default function CalendarPage() {
       const data = await res.json();
       setRows((data.events as CalEvent[]).map((e) => ({
         ...e, hours: String(e.duration_hours), description: e.title, task_key: 'HSB-7', deleted: false,
+        start_time: toHHMM(e.start),
       })));
       setFetched(true);
       if (!data.count) setError('No timed events found for this date.');
@@ -104,6 +111,7 @@ export default function CalendarPage() {
           body: JSON.stringify({
             task_id: row.task_key, task_title: taskTitle,
             entry_date: date, work_description: row.description, hours: parseFloat(row.hours),
+            start_time: row.start_time || null,
           }),
         });
       } catch (ex) { console.error('save error', ex); }
@@ -202,7 +210,7 @@ export default function CalendarPage() {
                   <table className="w-full text-sm" style={{ minWidth: 760 }}>
                     <thead style={{ background: t.tableHead }}>
                       <tr>
-                        {['Time', 'Event Title', 'Task', 'Work Description', 'Hours', 'Status', ''].map((h) => (
+                        {['Time', 'Event Title', 'Task', 'Work Description', 'Hours', 'Start Time', 'Status', ''].map((h) => (
                           <th key={h} className="px-4 py-3 text-left font-semibold"
                             style={{ color: t.textHeader, borderBottom: t.border, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                             {h}
@@ -247,6 +255,12 @@ export default function CalendarPage() {
                               onChange={(e) => update(row.id, 'hours', e.target.value)}
                               className="w-20 px-2 py-1.5 rounded-md text-xs font-mono focus:outline-none"
                               style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text }} />
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <input type="time" value={row.start_time} disabled={row.already_logged}
+                              onChange={(e) => update(row.id, 'start_time', e.target.value)}
+                              className="px-2 py-1.5 rounded-md text-xs font-mono focus:outline-none"
+                              style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, colorScheme: t.colorScheme, width: 110 }} />
                           </td>
                           <td className="px-4 py-3.5">
                             {row.already_logged
