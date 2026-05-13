@@ -362,15 +362,19 @@ export default function Sidebar() {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const isManager = user?.role === 'teamlead' || user?.role === 'admin';
 
-  // Fetch pending count for managers
+  // Fetch pending count for managers — re-runs on every page navigation + polls every 60s
   useEffect(() => {
     if (!isManager || !token) return;
     const API = process.env.NEXT_PUBLIC_API_URL;
-    fetch(`${API}/approvals/pending`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.ok ? r.json() : { count: 0 })
-      .then((d) => setPendingCount(d.count ?? 0))
-      .catch(() => {});
-  }, [isManager, token]);
+    const load = () =>
+      fetch(`${API}/approvals/pending`, { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => r.ok ? r.json() : { count: 0 })
+        .then((d) => setPendingCount(d.count ?? 0))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 60_000);
+    return () => clearInterval(id);
+  }, [isManager, token, pathname]);
 
   const clearTimesheetCache = useTimesheetStore((s) => s.clearCache);
   const handleLogout = () => { logout(); clearTimesheetCache(); router.push('/login'); };
