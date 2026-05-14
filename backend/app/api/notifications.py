@@ -61,8 +61,8 @@ async def update_settings(body: NotificationSettingsBody, current_user: dict = D
 async def manual_trigger(current_user: dict = Depends(get_current_user)):
     """Admin: fire the daily reminder + weekly summary immediately."""
     require_admin(current_user)
-    from app.services.scheduler_service import run_reminder_job, run_weekly_summary_job
-    reminder = run_reminder_job()
+    from app.services.scheduler_service import run_morning_job, run_evening_job, run_weekly_summary_job
+    reminder = {"morning": run_morning_job(), "evening": run_evening_job()}
     try:
         weekly = run_weekly_summary_job()
     except Exception as e:
