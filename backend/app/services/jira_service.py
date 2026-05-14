@@ -550,8 +550,11 @@ class JiraService:
         """POST a worklog to JIRA using the user's own credentials.
         Returns True on success, False on any failure."""
         try:
+            from datetime import time as _time
             auth = HTTPBasicAuth(email, token)
             t = start_time or "11:00"
+            if isinstance(t, _time):
+                t = t.strftime('%H:%M')
             parts = t.split(":")
             hh = parts[0].zfill(2) if parts else "11"
             mm = parts[1].zfill(2) if len(parts) > 1 else "00"
