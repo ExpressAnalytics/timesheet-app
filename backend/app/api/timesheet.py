@@ -74,7 +74,7 @@ async def add_entry(body: TimesheetEntryCreate, current_user: dict = Depends(get
                 status_code=400,
                 detail=f"Cannot log time more than 3 working days back. Earliest allowed date: {min_date}",
             )
-        if body.entry_date > today:
+        if body.entry_date > today + timedelta(days=1):
             raise HTTPException(status_code=400, detail="Cannot log time for future dates")
 
     row = queries.create_entry(
