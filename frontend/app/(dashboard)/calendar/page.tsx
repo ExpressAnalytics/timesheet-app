@@ -95,8 +95,7 @@ export default function CalendarPage() {
   const deleteRow = (id: string) =>
     setRows((prev) => prev.map((r) => r.id === id ? { ...r, deleted: true } : r));
 
-  const submitAll = useCallback(async () => {
-    const toLog = rows.filter((r) => !r.deleted && !r.already_logged && parseFloat(r.hours) > 0);
+  const submitRows = useCallback(async (toLog: EventRow[]) => {
     if (!toLog.length) { setError('Nothing to submit.'); return; }
     setSaving(true); setError('');
     setSaveProgress({ current: 0, total: toLog.length });
@@ -119,7 +118,17 @@ export default function CalendarPage() {
     setSaving(false);
     setSaveProgress(null);
     router.push(`/timesheet?date=${date}`);
-  }, [rows, date, token, generalTasks, jiraTasks, router]);
+  }, [date, token, generalTasks, jiraTasks, router]);
+
+  const submitAll = useCallback(() => {
+    const toLog = rows.filter((r) => !r.deleted && !r.already_logged && parseFloat(r.hours) > 0);
+    return submitRows(toLog);
+  }, [rows, submitRows]);
+
+  const submitSection = useCallback((statuses: string[]) => {
+    const toLog = rows.filter((r) => !r.deleted && !r.already_logged && parseFloat(r.hours) > 0 && statuses.includes(r.response_status));
+    return submitRows(toLog);
+  }, [rows, submitRows]);
 
   const visible = rows.filter((r) => !r.deleted);
   const pendingCount = visible.filter((r) => !r.already_logged).length;
@@ -194,15 +203,29 @@ export default function CalendarPage() {
               return (
                 <div key={section.key} className="rounded-xl overflow-hidden shadow-sm" style={{ background: t.cardBg, border: t.border }}>
                   {/* Section header */}
-                  <div className="px-5 py-3 flex items-center gap-2.5" style={{ background: section.bg, borderBottom: t.border }}>
-                    <span className="w-2 h-2 rounded-full" style={{ background: section.color }} />
-                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: section.color }}>
-                      {section.label}
-                    </span>
-                    <span className="text-xs px-1.5 py-0.5 rounded font-medium"
-                      style={{ background: section.color + '22', color: section.color }}>
-                      {sectionRows.length}
-                    </span>
+                  <div className="px-5 py-3 flex items-center justify-between" style={{ background: section.bg, borderBottom: t.border }}>
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-2 h-2 rounded-full" style={{ background: section.color }} />
+                      <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: section.color }}>
+                        {section.label}
+                      </span>
+                      <span className="text-xs px-1.5 py-0.5 rounded font-medium"
+                        style={{ background: section.color + '22', color: section.color }}>
+                        {sectionRows.length}
+                      </span>
+                    </div>
+                    {(() => {
+                      const pending = sectionRows.filter((r) => !r.already_logged && parseFloat(r.hours) > 0).length;
+                      return pending > 0 ? (
+                        <button
+                          onClick={() => submitSection(section.statuses)}
+                          disabled={saving}
+                          className="px-4 py-1.5 rounded-lg text-white font-semibold text-xs hover:opacity-90 disabled:opacity-50 transition-opacity"
+                          style={{ background: `linear-gradient(135deg,${section.color},${section.color}dd)` }}>
+                          {saving ? 'Saving…' : `Submit ${section.label} (${pending})`}
+                        </button>
+                      ) : null;
+                    })()}
                   </div>
 
                   {/* Table */}

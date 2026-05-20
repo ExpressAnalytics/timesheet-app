@@ -34,6 +34,14 @@ def _get_min_allowed_date() -> date:
 router = APIRouter(prefix="/timesheet", tags=["Timesheet"])
 
 
+@router.get("/unlocked-dates")
+async def get_unlocked_dates(current_user: dict = Depends(get_current_user)):
+    """Return dates where the current user has at least one rejected entry.
+    These dates bypass the 3-working-day rule for edits and new entries."""
+    user_id = current_user["sub"]
+    return {"dates": queries.get_rejected_dates_for_user(user_id)}
+
+
 @router.get("/entries", response_model=list[TimesheetEntryResponse])
 async def get_entries(
     entry_date: str,
@@ -70,10 +78,12 @@ async def add_entry(body: TimesheetEntryCreate, current_user: dict = Depends(get
         min_date = _get_min_allowed_date()
         today    = date.today()
         if body.entry_date < min_date:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot log time more than 3 working days back. Earliest allowed date: {min_date}",
-            )
+            # Bypass if this date is unlocked (has a rejected entry)
+            if not queries.has_rejected_entry_on_date(user_id, str(body.entry_date)):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot log time more than 3 working days back. Earliest allowed date: {min_date}",
+                )
         if body.entry_date > today + timedelta(days=1):
             raise HTTPException(status_code=400, detail="Cannot log time for future dates")
 
@@ -177,6 +187,7 @@ class ResubmitBody(BaseModel):
     task_title: Optional[str] = None
     for_user_id: Optional[str] = None
     is_resubmit: bool = False   # True = change status to resubmitted; False = keep status
+    keep_status: bool = False   # True = editing approved entry on unlocked day (status unchanged)
     start_time: Optional[str] = None
 
 
@@ -192,7 +203,10 @@ async def resubmit_entry(entry_id: str, body: ResubmitBody, current_user: dict =
         queries.edit_entry_admin(entry_id, body.work_description, body.hours, body.start_time)
     else:
         user_id = current_user["sub"]
-        if body.is_resubmit:
+        if body.keep_status:
+            # Editing an approved entry on an unlocked (rejected) day — status stays approved
+            queries.edit_entry_keep_status(entry_id, user_id, body.work_description, body.hours, body.start_time)
+        elif body.is_resubmit:
             queries.resubmit_entry(entry_id, user_id, body.work_description, body.hours, body.task_id, body.task_title, body.start_time)
         else:
             queries.edit_entry(entry_id, user_id, body.work_description, body.hours, body.start_time)

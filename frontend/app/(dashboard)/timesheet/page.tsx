@@ -284,6 +284,10 @@ export default function TimesheetPage() {
   const [syncMsg,        setSyncMsg]        = useState('');
   const [activeTab,      setActiveTab]      = useState<'sprint' | 'available' | 'general' | 'assisted'>('sprint');
 
+  // ── unlocked rejected dates ───────────────────────────────────────────────
+  const [unlockedDates, setUnlockedDates] = useState<string[]>([]);
+  const isUnlockedDate = (d: string) => unlockedDates.includes(d);
+
   // ── assisted task tab ─────────────────────────────────────────────────────
   const [assistUserId,         setAssistUserId]         = useState('');
   const [assistTasks,          setAssistTasks]          = useState<JiraTask[]>([]);
@@ -384,6 +388,13 @@ export default function TimesheetPage() {
 
     fetchEntries(selectedDate);      // always fresh — approval by another user changes status
     fetchTasks(undefined, true);     // force=true — bypass server cache so epic_name is always present
+
+    // Fetch dates unlocked for editing (has rejected entries)
+    if (!isAdmin) {
+      fetch(`${API}/timesheet/unlocked-dates`, { headers: authHeaders(token) })
+        .then((r) => r.ok ? r.json() : { dates: [] })
+        .then((d) => setUnlockedDates(d.dates ?? []));
+    }
 
     // All users need the user list — admins for the header selector, everyone for Assisted Task tab.
     // /users/active is open to all roles; /users/all is admin-only (richer data for user management).
@@ -495,12 +506,14 @@ export default function TimesheetPage() {
     if (!editModal) return;
     const { entry } = editModal;
     setEditModalSaving(true); setEditModalError('');
-    const isResubmit = entry.status === 'rejected';
+    const isResubmit  = entry.status === 'rejected';
+    const keepStatus  = entry.status === 'approved' && isUnlockedDate(entry.entry_date as string);
     const url = `${API}/timesheet/entries/${entry.id}/resubmit`;
     const body: Record<string, unknown> = {
       work_description: editModalWork.trim(),
       hours: parseFloat(editModalHours),
       is_resubmit: isResubmit,
+      keep_status: keepStatus,
       start_time: editModalStartTime || null,
     };
     if (isViewingOther) body.for_user_id = targetUserId;
@@ -515,6 +528,12 @@ export default function TimesheetPage() {
       } else {
         updateEntry(entry.id, patch);
         updateAllEntry(entry.id, patch);
+        // Refresh unlocked dates — resubmitting may re-lock the day
+        if (isResubmit && !isAdmin) {
+          fetch(`${API}/timesheet/unlocked-dates`, { headers: authHeaders(token) })
+            .then((r) => r.ok ? r.json() : { dates: [] })
+            .then((d) => setUnlockedDates(d.dates ?? []));
+        }
       }
       setEditModal(null);
     } catch (e) {
@@ -715,6 +734,44 @@ export default function TimesheetPage() {
           ))}
         </div>
 
+        {/* ── Rejected-day unlock banner ───────────────────────────────── */}
+        {!isAdmin && !isViewingOther && unlockedDates.length > 0 && (
+          <div className="px-4 py-3 rounded-xl flex flex-wrap items-center gap-3"
+            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.25)' }}>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span className="text-sm font-semibold" style={{ color: '#dc2626' }}>Rejected entries — click a date to review and fix:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {unlockedDates.map((d) => (
+                <button key={d} onClick={() => handleDateChange(d)}
+                  className="px-3 py-1 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
+                  style={{
+                    background: selectedDate === d ? 'rgba(239,68,68,0.18)' : 'rgba(239,68,68,0.10)',
+                    color: '#dc2626', border: '1px solid rgba(239,68,68,0.3)',
+                  }}>
+                  {new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Unlocked day editing notice ──────────────────────────────── */}
+        {!isAdmin && !isViewingOther && isUnlockedDate(selectedDate) && (
+          <div className="px-4 py-3 rounded-xl flex items-center gap-2"
+            style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.3)' }}>
+            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+            </svg>
+            <span className="text-sm font-medium" style={{ color: '#92400e' }}>
+              This day is <strong>unlocked for editing</strong> — a rejected entry allows you to add, edit, or delete any entry for this date. Resubmitting the rejected entry will re-lock this day.
+            </span>
+          </div>
+        )}
+
         {/* ── Timesheet Entries ─────────────────────────────────────────── */}
         <div className="rounded-xl p-6 shadow-sm" style={{ background: t.cardBg, border: t.border }}>
           {/* section header with refresh */}
@@ -756,8 +813,10 @@ export default function TimesheetPage() {
                 </thead>
                 <tbody>
                   {activeEntries.map((entry) => {
-                    const rl      = rowLoading[entry.id];
-                    const canEdit = isViewingOther || entry.status === 'pending' || entry.status === 'resubmitted' || entry.status === 'rejected';
+                    const rl           = rowLoading[entry.id];
+                    const onUnlocked   = !isViewingOther && isUnlockedDate(entry.entry_date as string);
+                    const canEdit      = isViewingOther || entry.status === 'pending' || entry.status === 'resubmitted' || entry.status === 'rejected' || onUnlocked;
+                    const canDelete    = isViewingOther || entry.status === 'pending' || entry.status === 'resubmitted' || onUnlocked;
                     return (
                     <tr key={entry.id} style={{ borderBottom: t.border,
                       background: entry.status === 'rejected' ? 'rgba(239,68,68,0.03)' : undefined }}>
@@ -810,7 +869,7 @@ export default function TimesheetPage() {
                                 </svg>
                               </button>
                             )}
-                            {(isViewingOther || entry.status === 'pending' || entry.status === 'resubmitted') && (
+                            {canDelete && (
                               <button onClick={() => handleDelete(entry)}
                                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:opacity-80 transition-opacity"
                                 style={{ border: t.border, color: t.textMuted, background: 'transparent' }}>
@@ -1066,7 +1125,7 @@ export default function TimesheetPage() {
                 <div className="flex-1">
                   <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>Date</label>
                   <input type="date" value={logDate}
-                    min={minAllowedDate}
+                    min={isUnlockedDate(logDate) ? logDate : minAllowedDate}
                     max={isAdmin ? undefined : today}
                     onChange={(e) => setLogDate(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none"

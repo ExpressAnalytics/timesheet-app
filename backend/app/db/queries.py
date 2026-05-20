@@ -104,6 +104,33 @@ def delete_entry(entry_id: str, user_id: str) -> bool:
     return True
 
 
+def has_rejected_entry_on_date(user_id: str, entry_date: str) -> bool:
+    """True if the user has at least one rejected entry on the given date."""
+    row = execute_query(
+        "SELECT 1 FROM timesheet_entries WHERE user_id = %s AND entry_date = %s AND status = 'rejected' LIMIT 1",
+        (user_id, entry_date), fetch_one=True,
+    )
+    return row is not None
+
+
+def get_rejected_dates_for_user(user_id: str) -> list:
+    """Return sorted list of date strings where user has at least one rejected entry."""
+    rows = execute_query(
+        "SELECT DISTINCT CAST(entry_date AS VARCHAR) AS entry_date FROM timesheet_entries WHERE user_id = %s AND status = 'rejected' ORDER BY entry_date",
+        (user_id,), fetch_all=True,
+    ) or []
+    return [str(r["entry_date"]) for r in rows]
+
+
+def edit_entry_keep_status(entry_id: str, user_id: str, work_description: str,
+                            hours: float, start_time: str = None):
+    """Edit an approved entry on an unlocked (rejected) day without changing its status."""
+    execute_query(
+        "UPDATE timesheet_entries SET work_description = %s, hours = %s, start_time = %s WHERE id = %s AND user_id = %s",
+        (work_description, hours, start_time, entry_id, user_id), fetch_all=False,
+    )
+
+
 def edit_entry(entry_id: str, user_id: str, work_description: str, hours: float,
                start_time: str = None) -> Optional[Dict[str, Any]]:
     """Resource/teamlead edits their own pending or resubmitted entry."""

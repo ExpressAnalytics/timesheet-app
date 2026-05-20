@@ -22,6 +22,7 @@ interface PendingEntry {
   avatar: string;
   role: string;
   manager_name: string | null;
+  epic?: string | null;
 }
 
 function aH(token: string) {
@@ -383,7 +384,7 @@ export default function ApprovalsPage() {
               <table className="w-full text-sm" style={{ minWidth: 620 }}>
                 <thead style={{ background: t.tableHead }}>
                   <tr>
-                    {['Date', 'Task', 'Work Done', 'Hours', 'Status', 'Actions'].map((h) => (
+                    {['Date', 'Task', 'Project', 'Work Done', 'Hours', 'Status', 'Actions'].map((h) => (
                       <th key={h} className="px-5 py-3 text-left font-semibold"
                         style={{ color: t.textHeader, borderBottom: t.border, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         {h}
@@ -403,6 +404,9 @@ export default function ApprovalsPage() {
                           {entry.task_id}
                         </span>
                         <span className="ml-2 text-xs" style={{ color: t.textMuted }}>{entry.task_title}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-xs" style={{ color: t.textMuted }}>
+                        {entry.epic ?? '—'}
                       </td>
                       <td className="px-5 py-3.5 max-w-[200px] text-xs" style={{ color: t.textBody }}>
                         {entry.work_description}
