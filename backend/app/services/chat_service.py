@@ -40,13 +40,49 @@ def _get_chat_service():
 
 
 def _dm_space_name(service, user_email: str) -> Optional[str]:
-    """Get (or create) a DM space with user_email using the setup endpoint.
-    setup() is idempotent — returns the existing space if one already exists."""
+    """Find the existing DM space for user_email by listing spaces and matching full name.
+    Falls back to setup() for users with no existing DM space."""
+    email_user  = user_email.split("@")[0].lower()   # "aditya.kale"
+    name_parts  = email_user.split(".")               # ["aditya", "kale"]
+
+    try:
+        next_page = None
+        while True:
+            kwargs = {"pageSize": 200}
+            if next_page:
+                kwargs["pageToken"] = next_page
+            resp = service.spaces().list(**kwargs).execute()
+            for space in resp.get("spaces", []):
+                if space.get("spaceType") != "DIRECT_MESSAGE":
+                    continue
+                try:
+                    mem_resp = service.spaces().members().list(
+                        parent=space["name"], pageSize=100
+                    ).execute()
+                    for m in mem_resp.get("memberships", []):
+                        dl_parts = m.get("member", {}).get("displayName", "").lower().split()
+                        # All parts of the email username must appear in the display name.
+                        # "aditya.kale" → ["aditya","kale"]; both must be in display name words.
+                        # This correctly distinguishes "aditya kale" from "aditya jaysawal".
+                        if name_parts and all(p in dl_parts for p in name_parts):
+                            sname = space["name"]
+                            print(f"[chat] Found DM space {sname} for {user_email}")
+                            return sname
+                except Exception:
+                    continue
+            next_page = resp.get("nextPageToken")
+            if not next_page:
+                break
+    except Exception as e:
+        print(f"[chat] Could not list DM spaces: {e}")
+
+    # Fallback: create a new DM space via setup()
     try:
         space = service.spaces().setup(body={
             "space": {"spaceType": "DIRECT_MESSAGE"},
             "memberships": [{"member": {"name": f"users/{user_email}", "type": "HUMAN"}}],
         }).execute()
+        print(f"[chat] Created new DM space {space['name']} for {user_email}")
         return space["name"]
     except Exception as e:
         print(f"[chat] Could not set up DM space for {user_email}: {e}")
