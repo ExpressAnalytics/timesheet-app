@@ -17,46 +17,18 @@ const GOOGLE_ERRORS: Record<string, string> = {
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const [email,   setEmail]   = useState('');
-  const [error,   setError]   = useState('');
+  const [error,    setError]    = useState('');
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     const err = searchParams.get('error');
     if (err) setError(GOOGLE_ERRORS[err] ?? 'Sign-in failed. Please try again.');
   }, [searchParams]);
 
-  const isValidEmail = email.endsWith('@expressanalytics.net');
-  const [checking, setChecking] = useState(false);
-
-  const handleGoogle = async (e: React.MouseEvent) => {
+  const handleGoogle = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!email) {
-      setError('Please enter your work email first.');
-      return;
-    }
-    if (!isValidEmail) {
-      setError('Only @expressanalytics.net accounts are allowed.');
-      return;
-    }
-    setError('');
     setChecking(true);
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch(`${API}/auth/check-email?email=${encodeURIComponent(email)}`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-      const data = await res.json();
-      if (!data.exists) {
-        setError('No TimeSync account found for this email.');
-        setChecking(false);
-        return;
-      }
-    } catch {
-      // timeout or network error — proceed to Google anyway
-    }
-    window.location.href = `${API}/auth/google?login_hint=${encodeURIComponent(email)}`;
+    window.location.href = `${API}/auth/google`;
   };
 
   return (
@@ -147,32 +119,9 @@ function LoginForm() {
             <h1 className="text-[28px] leading-[1.15] tracking-tight font-semibold text-zinc-900">
               Welcome back.
             </h1>
-            <p className="text-[14px] leading-relaxed text-zinc-500 max-w-[44ch]">
-              Use your Express Analytics email to continue.
-            </p>
           </div>
 
-          <div className="space-y-5">
-            {/* Email input */}
-            <div className="space-y-2">
-              <label htmlFor="email" className="block text-[12px] font-medium text-zinc-700">
-                Work email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(''); }}
-                placeholder="alex.kothari@expressanalytics.net"
-                autoFocus
-                autoComplete="email"
-                className="w-full h-12 px-4 rounded-xl text-[14px] text-zinc-900 placeholder-zinc-400 bg-white border border-zinc-200 transition-[border-color,box-shadow] duration-200 focus:outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-ring)]"
-              />
-              <p className="text-[11.5px] text-zinc-500">
-                Only <span className="font-mono text-zinc-700">@expressanalytics.net</span> accounts are allowed.
-              </p>
-            </div>
-
+          <div className="space-y-4">
             {/* Error */}
             {error && (
               <div
@@ -208,6 +157,10 @@ function LoginForm() {
               )}
               Continue with Google
             </button>
+
+            <p className="text-[11.5px] text-zinc-500 text-center">
+              Only <span className="font-mono text-zinc-700">@expressanalytics.net</span> accounts are allowed.
+            </p>
           </div>
 
           <p className="text-[12.5px] text-zinc-500">

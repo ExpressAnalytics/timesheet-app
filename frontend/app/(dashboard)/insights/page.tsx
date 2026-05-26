@@ -12,9 +12,15 @@ interface StatData {
   user_hours:       { user_id: string; total_hours: number }[];
   status_breakdown: { status: string; entry_count: number }[];
 }
+interface Task {
+  key: string; title: string;
+  story_points?: number | null; est_hours?: number | null;
+  logged_hours: number; status: string; is_active_sprint: boolean;
+}
 interface Member {
   user_id: string; full_name: string; avatar: string;
   role: string; total_logged: number;
+  tasks?: Task[];
 }
 interface Epic {
   epic_key: string | null; epic_name: string | null;
@@ -113,46 +119,192 @@ function UserBar({ member, pct, color }: { member: Member; pct: number; color: s
   );
 }
 
-// ── EpicRow ───────────────────────────────────────────────────────────────────
-function EpicRow({ epic, userColorMap, borderTop }: {
-  epic: Epic; userColorMap: Record<string, string>; borderTop: boolean;
+// ── TaskDrawer ────────────────────────────────────────────────────────────────
+function TaskDrawer({ epic, userColorMap, onClose }: {
+  epic: Epic; userColorMap: Record<string, string>; onClose: () => void;
 }) {
-  const estHours   = epic.total_est_hours || 0;
+  // Aggregate tasks across all members: sum logged_hours per task key
+  const taskMap = new Map<string, Task & { logged_hours: number }>();
+  for (const m of epic.members) {
+    for (const t of m.tasks ?? []) {
+      if (!taskMap.has(t.key)) {
+        taskMap.set(t.key, { ...t, logged_hours: 0 });
+      }
+      taskMap.get(t.key)!.logged_hours += t.logged_hours;
+    }
+  }
+  const tasks = [...taskMap.values()].sort((a, b) => b.logged_hours - a.logged_hours);
+  const epicName = epic.epic_name || epic.epic_key || '(No Epic)';
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      {/* Panel */}
+      <div
+        className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-[520px] flex flex-col shadow-2xl"
+        style={{ background: t.cardBg, borderLeft: t.border }}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between p-6 flex-shrink-0"
+          style={{ borderBottom: t.border }}>
+          <div>
+            <div className="text-base font-bold" style={{ color: t.text }}>{epicName}</div>
+            {epic.epic_key && (
+              <div className="text-xs font-mono mt-0.5" style={{ color: t.textSubtle }}>{epic.epic_key}</div>
+            )}
+            <div className="flex items-center gap-3 mt-2 text-xs" style={{ color: t.textMuted }}>
+              <span>{epic.total_logged_hours.toFixed(1)}h logged</span>
+              {epic.total_est_hours > 0 && (
+                <><span style={{ color: t.borderColor }}>·</span>
+                <span>{epic.total_est_hours.toFixed(0)}h estimated</span></>
+              )}
+              <span style={{ color: t.borderColor }}>·</span>
+              <span>{tasks.length} task{tasks.length !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:opacity-70 transition-opacity"
+            style={{ color: t.textSubtle }}>
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Task list */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {tasks.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-sm" style={{ color: t.textSubtle }}>
+              No tasks logged in this period
+            </div>
+          ) : (
+            tasks.map(task => {
+              const sp    = task.story_points ?? null;
+              const estH  = sp ? sp * 8 : (task.est_hours ?? 0);
+              const pct   = estH > 0 ? Math.min(100, (task.logged_hours / estH) * 100) : 0;
+              const over  = estH > 0 && task.logged_hours > estH;
+              const done  = isDone(task.status);
+              return (
+                <div key={task.key} className="rounded-xl p-4"
+                  style={{ background: t.tableHead, border: t.border }}>
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-semibold leading-snug truncate" style={{ color: t.text }}>
+                        {task.title}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5 text-xs" style={{ color: t.textSubtle }}>
+                        <span className="font-mono">{task.key}</span>
+                        {sp !== null && <><span>·</span><span>{sp} SP</span></>}
+                        {task.is_active_sprint && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                            style={{ background: 'rgba(59,130,246,0.12)', color: '#3b82f6' }}>
+                            Active Sprint
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-sm font-bold tabular-nums" style={{ color: t.text }}>
+                        {task.logged_hours.toFixed(1)}h
+                      </div>
+                      <div className="text-[10px] mt-0.5 px-2 py-0.5 rounded-full font-medium"
+                        style={{
+                          background: done ? 'rgba(16,185,129,0.1)' : 'rgba(100,116,139,0.1)',
+                          color:      done ? '#10b981'               : t.textSubtle,
+                        }}>
+                        {task.status}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mini progress bar */}
+                  {estH > 0 && (
+                    <div className="mt-2">
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: t.borderColor }}>
+                        <div className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${pct}%`,
+                            background: over ? '#ef4444' : done ? '#10b981' : '#3b82f6',
+                          }} />
+                      </div>
+                      <div className="flex justify-between mt-1 text-[10px]" style={{ color: t.textSubtle }}>
+                        <span>{task.logged_hours.toFixed(1)}h / {estH.toFixed(0)}h</span>
+                        <span style={{ color: over ? '#ef4444' : '#10b981' }}>
+                          {over ? `+${(task.logged_hours - estH).toFixed(1)}h over` : `${(100 - pct).toFixed(0)}% left`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Member avatars who logged on this task */}
+                  <div className="flex items-center gap-1 mt-2">
+                    {epic.members
+                      .filter(m => (m.tasks ?? []).some(mt => mt.key === task.key))
+                      .map(m => (
+                        <div key={m.user_id}
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
+                          style={{ background: userColorMap[m.user_id] ?? '#64748b' }}
+                          title={m.full_name}>
+                          {m.full_name.split(' ').map(p => p[0]).join('').slice(0, 2)}
+                        </div>
+                      ))
+                    }
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── EpicRow ───────────────────────────────────────────────────────────────────
+function EpicRow({ epic, userColorMap, borderTop, onOpen }: {
+  epic: Epic; userColorMap: Record<string, string>; borderTop: boolean; onOpen: () => void;
+}) {
+  const estHours    = epic.total_est_hours || 0;
   const totalLogged = epic.total_logged_hours || 0;
-  // Bar capacity: SP×8 if available, else fall back to logged hours
-  const capacity   = estHours > 0 ? estHours : totalLogged;
-  const hasEst     = estHours > 0;
-  const overBudget = hasEst && totalLogged > estHours;
-  const filledPct  = capacity > 0 ? Math.min(100, (totalLogged / capacity) * 100) : 0;
-  const name       = epic.epic_name || epic.epic_key || '(No Epic)';
+  const capacity    = estHours > 0 ? estHours : totalLogged;
+  const hasEst      = estHours > 0;
+  const overBudget  = hasEst && totalLogged > estHours;
+  const filledPct   = capacity > 0 ? Math.min(100, (totalLogged / capacity) * 100) : 0;
+  const name        = epic.epic_name || epic.epic_key || '(No Epic)';
 
   const sorted = [...epic.members]
     .filter(m => m.total_logged > 0)
     .sort((a, b) => b.total_logged - a.total_logged);
 
   return (
-    <div className="flex items-start gap-5 py-3"
-      style={borderTop ? { borderTop: `1px solid ${t.borderColor}` } : {}}>
-
+    <div
+      className="flex items-start gap-5 py-3 group cursor-pointer"
+      style={borderTop ? { borderTop: `1px solid ${t.borderColor}` } : {}}
+      onClick={onOpen}
+      title="Click to view tasks"
+    >
       {/* Epic info */}
       <div className="w-52 flex-shrink-0 pt-0.5">
-        <div className="text-sm font-semibold leading-snug" style={{ color: t.textBody }} title={name}>
+        <div className="text-sm font-semibold leading-snug group-hover:underline"
+          style={{ color: t.textBody }} title={name}>
           {name.length > 32 ? name.slice(0, 30) + '…' : name}
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           {epic.epic_key && (
             <span className="text-xs font-mono" style={{ color: t.textSubtle }}>{epic.epic_key}</span>
           )}
+          <span className="text-[10px]" style={{ color: t.textSubtle }}>View tasks →</span>
         </div>
       </div>
 
       {/* Bar + meta */}
       <div className="flex-1 min-w-0">
-        {/* Progress bar: full width = estimated hours */}
         <div className="h-10 rounded-xl overflow-hidden relative flex"
           style={{ background: t.tableHead, border: `1px solid ${t.borderColor}` }}>
           {totalLogged > 0 ? (
-            /* Filled user segments — each sized relative to total capacity */
             <div className="flex h-full" style={{ width: `${filledPct}%` }}>
               {sorted.map(m => (
                 <UserBar
@@ -164,7 +316,6 @@ function EpicRow({ epic, userColorMap, borderTop }: {
               ))}
             </div>
           ) : null}
-          {/* Remaining label on the right */}
           {hasEst && !overBudget && totalLogged < estHours && (
             <div className="absolute right-3 inset-y-0 flex items-center text-xs font-medium pointer-events-none"
               style={{ color: t.textSubtle }}>
@@ -177,15 +328,8 @@ function EpicRow({ epic, userColorMap, borderTop }: {
               +{(totalLogged - estHours).toFixed(0)}h over
             </div>
           )}
-          {totalLogged === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center text-xs font-medium"
-              style={{ color: t.textSubtle }}>
-              No hours logged in this period
-            </div>
-          )}
         </div>
 
-        {/* Stats below bar */}
         <div className="flex items-center justify-between mt-1 px-0.5">
           <span className="text-xs" style={{ color: t.textSubtle }}>
             {totalLogged.toFixed(1)}h logged
@@ -206,7 +350,8 @@ function EpicRow({ epic, userColorMap, borderTop }: {
 function SpaceSection({ space, userColorMap, accent }: {
   space: Space; userColorMap: Record<string, string>; accent: string;
 }) {
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed,    setCollapsed]    = useState(true);
+  const [drawerEpic,   setDrawerEpic]   = useState<Epic | null>(null);
   const totalH = space.epics.reduce((s, e) => s + e.total_logged_hours, 0);
 
   return (
@@ -274,11 +419,21 @@ function SpaceSection({ space, userColorMap, accent }: {
                   epic={epic}
                   userColorMap={userColorMap}
                   borderTop={idx > 0}
+                  onOpen={() => setDrawerEpic(epic)}
                 />
               ))
             )}
           </div>
         </>
+      )}
+
+      {/* Task drawer */}
+      {drawerEpic && (
+        <TaskDrawer
+          epic={drawerEpic}
+          userColorMap={userColorMap}
+          onClose={() => setDrawerEpic(null)}
+        />
       )}
     </div>
   );
@@ -371,7 +526,7 @@ export default function InsightsPage() {
       ...space,
       epics: space.epics.filter(e =>
         tab === 'active'
-          ? !isDone(e.epic_status)
+          ? !isDone(e.epic_status) && e.total_logged_hours > 0
           : isDone(e.epic_status) && e.total_logged_hours > 0
       ),
     }))
