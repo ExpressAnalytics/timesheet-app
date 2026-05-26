@@ -65,26 +65,35 @@ function DayTooltip({ day, x, y }: { day: DayData; x: number; y: number }) {
 
 // ── Team day tooltip ──────────────────────────────────────────────────────────
 function TeamDayTooltip({ day, x, y }: { day: TeamDayData; x: number; y: number }) {
+  const maxH    = Math.floor(window.innerHeight * 0.75);
+  const tipW    = 240;
+  const left    = Math.min(x + 12, window.innerWidth - tipW - 8);
+  // Flip above cursor if too close to bottom
+  const spaceBelow = window.innerHeight - y - 12;
+  const top     = spaceBelow > 200 ? y + 12 : Math.max(8, y - maxH - 8);
   return (
-    <div className="fixed z-50 pointer-events-none rounded-xl shadow-xl p-3 min-w-[200px]"
+    <div className="fixed z-50 pointer-events-none rounded-xl shadow-xl p-3"
       style={{
-        left: Math.min(x + 12, window.innerWidth - 240),
-        top:  Math.min(y + 12, window.innerHeight - 300),
+        left, top,
+        width: tipW,
+        maxHeight: maxH,
+        display: 'flex', flexDirection: 'column',
         background: '#1a1a2e', border: '1px solid #2a2a3a', fontSize: 12,
       }}>
-      <p className="font-bold mb-2" style={{ color: '#e2e8f0' }}>
+      <p className="font-bold mb-1" style={{ color: '#e2e8f0' }}>
         {new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
       </p>
       <p className="text-xs mb-2" style={{ color: '#94a3b8' }}>
         {day.filled_count} / {day.total_users} filled (≥ 8h)
       </p>
-      <div className="space-y-1 border-t pt-2 mt-1" style={{ borderColor: '#2a2a3a' }}>
+      <div className="border-t pt-2 mt-1 space-y-1 overflow-y-auto"
+        style={{ borderColor: '#2a2a3a', flex: 1, minHeight: 0 }}>
         {day.users.map(u => (
           <div key={u.user_id} className="flex justify-between gap-4 items-center">
             <span style={{ color: u.hours >= 8 ? '#10b981' : u.hours > 0 ? '#f59e0b' : '#64748b' }}>
               {u.full_name}
             </span>
-            <span style={{ color: '#e2e8f0', fontWeight: 600 }}>
+            <span style={{ color: '#e2e8f0', fontWeight: 600, whiteSpace: 'nowrap' }}>
               {u.hours > 0 ? `${u.hours.toFixed(1)}h` : '—'}
             </span>
           </div>
