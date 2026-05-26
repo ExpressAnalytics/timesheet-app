@@ -168,7 +168,7 @@ function SpaceDrillDown({ userId, startDate, endDate, token, sprintOnly }: {
     <tr>
       <td colSpan={8} style={{ background: t.cardBg2, padding: 0 }}>
         <div className="px-8 py-4 space-y-2">
-          {spaces.map((space) => {
+          {spaces.filter(s => s.total_hours > 0).map((space) => {
             const isSpaceOpen = openSpaces.has(space.space_key);
             return (
               <div key={space.space_key} className="rounded-lg overflow-hidden" style={{ border: t.border }}>
