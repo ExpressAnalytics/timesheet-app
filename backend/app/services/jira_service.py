@@ -118,7 +118,8 @@ class JiraService:
             jql = f'assignee = "{email}" AND statusCategory != Done AND issuetype not in ("Epic") ORDER BY updated DESC'
             fields = [
                 "summary", "status", "assignee",
-                "customfield_10016",        # story points
+                "customfield_10016",        # story points (MD/HSB projects)
+                "customfield_10026",        # story points (DS project)
                 "customfield_10014",        # epic link (legacy key)
                 "parent",                   # parent issue = epic in Jira Cloud v3
                 "timeoriginalestimate",
@@ -132,13 +133,9 @@ class JiraService:
                 fields = issue.get("fields", {})
                 summary = fields.get("summary", "")
 
-                # SP: prefer Jira SP fields; fall back to trailing ":N" in title
-                sp = fields.get("customfield_10016") or fields.get("customfield_10028")
-                if sp is None:
-                    import re as _re
-                    m = _re.search(r':\s*(\d+(?:\.\d+)?)\s*$', summary)
-                    if m:
-                        sp = float(m.group(1))
+                # SP: check all known SP custom fields across projects
+                sp = (fields.get("customfield_10016") or fields.get("customfield_10026")
+                      or fields.get("customfield_10028"))
 
                 # Est. hours = SP * 8  (1 story point = 1 day = 8 hours)
                 est_hours = round(sp * 8, 2) if sp is not None else None
@@ -195,7 +192,8 @@ class JiraService:
                 "maxResults": 200,
                 "fields": [
                     "summary", "status", "assignee",
-                    "customfield_10016",        # story points
+                    "customfield_10016",        # story points (MD/HSB projects)
+                    "customfield_10026",        # story points (DS project)
                     "customfield_10014",        # epic link (legacy)
                     "parent",                   # parent issue = epic in Jira Cloud v3
                     "timeoriginalestimate",
@@ -220,12 +218,8 @@ class JiraService:
                 fields = issue.get("fields", {})
                 summary = fields.get("summary", "")
 
-                sp = fields.get("customfield_10016") or fields.get("customfield_10028")
-                if sp is None:
-                    import re as _re
-                    m = _re.search(r':\s*(\d+(?:\.\d+)?)\s*$', summary)
-                    if m:
-                        sp = float(m.group(1))
+                sp = (fields.get("customfield_10016") or fields.get("customfield_10026")
+                      or fields.get("customfield_10028"))
 
                 est_hours = round(sp * 8, 2) if sp is not None else None
 
@@ -426,11 +420,8 @@ class JiraService:
                 fields  = issue.get("fields", {})
                 summary = fields.get("summary", "")
 
-                sp = fields.get("customfield_10016") or fields.get("customfield_10028")
-                if sp is None:
-                    m = re.search(r':\s*(\d+(?:\.\d+)?)\s*$', summary)
-                    if m:
-                        sp = float(m.group(1))
+                sp = (fields.get("customfield_10016") or fields.get("customfield_10026")
+                      or fields.get("customfield_10028"))
                 est_hours = round(sp * 8, 2) if sp is not None else None
 
                 sprint_name = None
@@ -497,7 +488,7 @@ class JiraService:
                 f"{self.base_url}/issue/{key}",
                 auth=self.auth,
                 headers=self.headers,
-                params={"fields": "summary,status,assignee,customfield_10016,customfield_10014,parent"},
+                params={"fields": "summary,status,assignee,customfield_10016,customfield_10026,customfield_10014,parent"},
                 timeout=10,
             )
             if not r.ok:
@@ -507,11 +498,8 @@ class JiraService:
             fields = issue.get("fields", {})
             summary = fields.get("summary", "")
 
-            sp = fields.get("customfield_10016") or fields.get("customfield_10028")
-            if sp is None:
-                m = _re.search(r':\s*(\d+(?:\.\d+)?)\s*$', summary)
-                if m:
-                    sp = float(m.group(1))
+            sp = (fields.get("customfield_10016") or fields.get("customfield_10026")
+                  or fields.get("customfield_10028"))
             est_hours = round(sp * 8, 2) if sp is not None else None
 
             parent = fields.get("parent") or {}
