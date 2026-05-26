@@ -54,6 +54,7 @@ export default function ApprovalsPage() {
   const [successMsg,  setSuccessMsg]  = useState('');
   const [warnMsg,     setWarnMsg]     = useState('');
   const [errorMsg,    setErrorMsg]    = useState('');
+  const [epicNames,   setEpicNames]   = useState<Record<string, string>>({});
 
   // Reject modal
   const [rejectTarget, setRejectTarget] = useState<PendingEntry | null>(null);
@@ -79,8 +80,20 @@ export default function ApprovalsPage() {
       fetch(url, { headers: aH(token) }),
       fetch(`${API}/users/subordinates`, { headers: aH(token) }),
     ]);
-    if (pendingRes.ok) setEntries((await pendingRes.json()).entries);
-    if (subsRes.ok)    setTeamSize((await subsRes.json()).subordinates?.length ?? 0);
+    if (pendingRes.ok) {
+      const data = await pendingRes.json();
+      const list: PendingEntry[] = data.entries ?? [];
+      setEntries(list);
+      // Fetch epic names for all unique epic keys in this batch
+      const epicKeys = [...new Set(list.map(e => e.epic).filter(Boolean))] as string[];
+      if (epicKeys.length > 0) {
+        fetch(`${API}/jira/epic-names?keys=${epicKeys.join(',')}`, { headers: aH(token) })
+          .then(r => r.ok ? r.json() : {})
+          .then(names => setEpicNames(prev => ({ ...prev, ...names })))
+          .catch(() => {});
+      }
+    }
+    if (subsRes.ok) setTeamSize((await subsRes.json()).subordinates?.length ?? 0);
     setLoading(false);
   }, [token, dateFilter]);
 
@@ -412,8 +425,11 @@ export default function ApprovalsPage() {
                             {entry.task_id.split('-')[0]}
                           </span>
                           {entry.epic && (
-                            <span className="text-xs truncate max-w-[100px]"
-                              style={{ color: t.textSubtle }} title={entry.epic}>
+                            <span
+                              className="text-xs truncate max-w-[100px] cursor-default"
+                              style={{ color: t.textSubtle }}
+                              title={epicNames[entry.epic] ? `${entry.epic}: ${epicNames[entry.epic]}` : entry.epic}
+                            >
                               {entry.epic}
                             </span>
                           )}

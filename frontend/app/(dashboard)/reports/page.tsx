@@ -208,7 +208,7 @@ function SpaceDrillDown({ userId, startDate, endDate, token, sprintOnly }: {
                 {/* ── Epic list (shown when space is open) ── */}
                 {isSpaceOpen && (
                   <div className="px-4 py-3 space-y-2">
-                    {space.epics.map((epic) => {
+                    {space.epics.filter(e => e.total_hours > 0).map((epic) => {
                       const epicId = `${space.space_key}::${epic.epic_key ?? '__none__'}`;
                       const isEpicOpen = openEpics.has(epicId);
                       return (

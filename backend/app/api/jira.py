@@ -109,6 +109,25 @@ async def get_my_tasks(
     return tasks
 
 
+@router.get("/epic-names")
+async def get_epic_names(keys: str = Query(..., description="Comma-separated Jira issue keys"),
+                         current_user: dict = Depends(get_current_user)):
+    """Resolve epic keys to their Jira summary (title). Returns {key: title} dict."""
+    key_list = [k.strip().upper() for k in keys.split(",") if k.strip()]
+    if not key_list:
+        return {}
+    keys_jql = ", ".join(f'"{k}"' for k in key_list)
+    try:
+        issues = jira_service._fetch_paginated_jql(
+            f"issueKey in ({keys_jql})",
+            ["summary"],
+            timeout=10,
+        )
+        return {issue["key"]: issue["fields"]["summary"] for issue in issues}
+    except Exception:
+        return {}
+
+
 @router.get("/task-by-key/{task_key}")
 async def get_task_by_key(task_key: str, current_user: dict = Depends(get_current_user)):
     """Fetch a single Jira task by key (any project) and find its owner in the app's user DB."""
