@@ -16,6 +16,7 @@ interface ResourceStat {
   manager_id: string | null;
   manager_name: string | null;
   total_hours: number;
+  capped_hours: number;
   total_entries: number;
   pending_count: number;
   approved_count: number;
@@ -356,9 +357,10 @@ function ResourceSection({
   sprintOnly: boolean;
   onToggle: (uid: string) => void;
 }) {
-  if (rows.length === 0) return null;
+  const visibleRows = rows.filter(r => Number(r.total_hours || 0) > 0);
+  if (visibleRows.length === 0) return null;
 
-  const sectionHours = rows.reduce((s, r) => s + Number(r.total_hours || 0), 0);
+  const sectionHours = visibleRows.reduce((s, r) => s + Number(r.total_hours || 0), 0);
 
   return (
     <div className="rounded-xl overflow-hidden shadow-sm" style={{ background: t.cardBg, border: t.border }}>
@@ -367,7 +369,7 @@ function ResourceSection({
         <h4 className="text-sm font-bold uppercase tracking-wider" style={{ color: t.textHeader }}>{title}</h4>
         <span className="px-2 py-0.5 rounded-full text-xs font-bold"
           style={{ background: 'rgba(100,116,139,0.15)', color: t.textMuted }}>
-          {rows.length}
+          {visibleRows.length}
         </span>
         <span className="ml-auto text-xs font-semibold" style={{ color: t.textMuted }}>
           {sectionHours.toFixed(1)}h total
@@ -388,12 +390,13 @@ function ResourceSection({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
-            const hours    = Number(r.total_hours   || 0);
+          {visibleRows.map((r) => {
+            const hours       = Number(r.total_hours   || 0);
+            const cappedHours = Number(r.capped_hours  || 0);
             const entries  = Number(r.total_entries || 0);
             const pending  = Number(r.pending_count || 0);
             const approved = Number(r.approved_count || 0);
-            const pct      = Math.min(100, Math.round((hours / targetHours) * 100));
+            const pct      = Math.min(100, Math.round((cappedHours / targetHours) * 100));
             const barColor = pct >= 100 ? '#10b981' : pct >= 75 ? '#3b82f6' : pct >= 40 ? '#f59e0b' : '#ef4444';
             const isOpen   = expanded.has(r.user_id);
 

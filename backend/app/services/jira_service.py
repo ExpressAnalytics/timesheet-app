@@ -407,7 +407,8 @@ class JiraService:
                 jql = f'(parent in ({keys_str}) OR "Epic Link" in ({keys_str})) ORDER BY updated DESC'
                 batch_fields = [
                     "summary", "status", "assignee",
-                    "customfield_10016",   # story points
+                    "customfield_10016",   # story points (MD/HSB)
+                    "customfield_10026",   # story points (DS)
                     "customfield_10028",   # story points (alt)
                     "customfield_10014",   # epic link (legacy)
                     "parent",

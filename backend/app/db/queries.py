@@ -373,11 +373,23 @@ def get_analytics_for_manager(manager_id: str, start_date: str, end_date: str) -
         return []
     placeholders = ','.join(['%s'] * len(subordinate_ids))
     query = f"""
+        WITH daily AS (
+            SELECT user_id, entry_date, SUM(hours) AS day_hours
+            FROM timesheet_entries
+            WHERE entry_date BETWEEN %s AND %s
+            GROUP BY user_id, entry_date
+        ),
+        capped AS (
+            SELECT user_id, SUM(LEAST(day_hours, 8)) AS capped_hours
+            FROM daily
+            GROUP BY user_id
+        )
         SELECT u.user_id, u.full_name, u.email, u.avatar, u.role,
                u.manager_id,
                m.full_name AS manager_name,
-               COALESCE(SUM(te.hours), 0)   AS total_hours,
-               COUNT(te.id)                  AS total_entries,
+               COALESCE(SUM(te.hours), 0)          AS total_hours,
+               COALESCE(c.capped_hours, 0)          AS capped_hours,
+               COUNT(te.id)                          AS total_entries,
                COUNT(CASE WHEN te.status = 'pending'  THEN 1 END) AS pending_count,
                COUNT(CASE WHEN te.status = 'approved' THEN 1 END) AS approved_count
         FROM users u
@@ -385,11 +397,12 @@ def get_analytics_for_manager(manager_id: str, start_date: str, end_date: str) -
         LEFT JOIN timesheet_entries te
           ON te.user_id = u.user_id
           AND te.entry_date BETWEEN %s AND %s
+        LEFT JOIN capped c ON c.user_id = u.user_id
         WHERE u.user_id IN ({placeholders})
-        GROUP BY u.user_id, u.full_name, u.email, u.avatar, u.role, u.manager_id, m.full_name
+        GROUP BY u.user_id, u.full_name, u.email, u.avatar, u.role, u.manager_id, m.full_name, c.capped_hours
         ORDER BY u.full_name
     """
-    return execute_query(query, (start_date, end_date) + tuple(subordinate_ids), fetch_all=True) or []
+    return execute_query(query, (start_date, end_date, start_date, end_date) + tuple(subordinate_ids), fetch_all=True) or []
 
 
 def get_entries_by_date_range(user_id: str, from_date: str, to_date: str) -> list:
@@ -438,10 +451,22 @@ def get_task_total_logged(user_id: str, task_id: str) -> float:
 def get_analytics_for_all_resources(start_date: str, end_date: str) -> list:
     """Admin: hours + entry count per ALL active users in date range (including admins)."""
     query = """
+        WITH daily AS (
+            SELECT user_id, entry_date, SUM(hours) AS day_hours
+            FROM timesheet_entries
+            WHERE entry_date BETWEEN %s AND %s
+            GROUP BY user_id, entry_date
+        ),
+        capped AS (
+            SELECT user_id, SUM(LEAST(day_hours, 8)) AS capped_hours
+            FROM daily
+            GROUP BY user_id
+        )
         SELECT u.user_id, u.full_name, u.email, u.avatar, u.role,
                u.manager_id,
                m.full_name AS manager_name,
                COALESCE(SUM(te.hours), 0)                                AS total_hours,
+               COALESCE(c.capped_hours, 0)                               AS capped_hours,
                COUNT(te.id)                                               AS total_entries,
                COUNT(CASE WHEN te.status = 'pending'  THEN 1 END)        AS pending_count,
                COUNT(CASE WHEN te.status = 'approved' THEN 1 END)        AS approved_count
@@ -450,13 +475,14 @@ def get_analytics_for_all_resources(start_date: str, end_date: str) -> list:
         LEFT JOIN timesheet_entries te
           ON te.user_id = u.user_id
           AND te.entry_date BETWEEN %s AND %s
+        LEFT JOIN capped c ON c.user_id = u.user_id
         WHERE u.is_active = true
-        GROUP BY u.user_id, u.full_name, u.email, u.avatar, u.role, u.manager_id, m.full_name
+        GROUP BY u.user_id, u.full_name, u.email, u.avatar, u.role, u.manager_id, m.full_name, c.capped_hours
         ORDER BY
             CASE u.role WHEN 'admin' THEN 0 WHEN 'teamlead' THEN 1 ELSE 2 END,
             u.full_name
     """
-    return execute_query(query, (start_date, end_date), fetch_all=True) or []
+    return execute_query(query, (start_date, end_date, start_date, end_date), fetch_all=True) or []
 
 
 def get_task_breakdown_for_user(user_id: str, start_date: str, end_date: str) -> list:

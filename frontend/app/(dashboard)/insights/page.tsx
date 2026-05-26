@@ -526,7 +526,7 @@ export default function InsightsPage() {
       ...space,
       epics: space.epics.filter(e =>
         tab === 'active'
-          ? !isDone(e.epic_status) && e.total_logged_hours > 0
+          ? !isDone(e.epic_status)
           : isDone(e.epic_status) && e.total_logged_hours > 0
       ),
     }))

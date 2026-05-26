@@ -405,8 +405,19 @@ export default function ApprovalsPage() {
                         </span>
                         <span className="ml-2 text-xs" style={{ color: t.textMuted }}>{entry.task_title}</span>
                       </td>
-                      <td className="px-5 py-3.5 text-xs" style={{ color: t.textMuted }}>
-                        {entry.epic ?? '—'}
+                      <td className="px-5 py-3.5">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold w-fit"
+                            style={{ background: 'rgba(16,185,129,0.12)', color: '#059669' }}>
+                            {entry.task_id.split('-')[0]}
+                          </span>
+                          {entry.epic && (
+                            <span className="text-xs truncate max-w-[100px]"
+                              style={{ color: t.textSubtle }} title={entry.epic}>
+                              {entry.epic}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 max-w-[200px] text-xs" style={{ color: t.textBody }}>
                         {entry.work_description}
