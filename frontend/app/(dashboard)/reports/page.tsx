@@ -42,11 +42,11 @@ function getWeekRange() {
   return { start: localDateStr(mon), end: localDateStr(sun) };
 }
 
-function getMonthRange() {
+function getLast30Range() {
   const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth(), 1);
-  const end   = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  return { start: localDateStr(start), end: localDateStr(end) };
+  const start = new Date(today);
+  start.setDate(today.getDate() - 29);
+  return { start: localDateStr(start), end: localDateStr(today) };
 }
 
 /** Count Mon–Fri days between two ISO date strings (inclusive). */
@@ -62,7 +62,7 @@ function countWorkingDays(start: string, end: string): number {
   return Math.max(count, 1);
 }
 
-type Preset = 'week' | 'month' | 'custom';
+type Preset = 'week' | 'last30' | 'custom';
 
 // ── status pill ────────────────────────────────────────────────────────────────
 function StatusPill({ count, color, bg }: { count: number; color: string; bg: string }) {
@@ -1169,9 +1169,9 @@ export default function ReportsPage() {
   const router = useRouter();
 
   const [activeTab,  setActiveTab]  = useState<Tab>('resource');
-  const [preset,    setPreset]    = useState<Preset>('week');
-  const [startDate, setStartDate] = useState(getWeekRange().start);
-  const [endDate,   setEndDate]   = useState(getWeekRange().end);
+  const [preset,    setPreset]    = useState<Preset>('last30');
+  const [startDate, setStartDate] = useState(getLast30Range().start);
+  const [endDate,   setEndDate]   = useState(getLast30Range().end);
   const [stats,     setStats]     = useState<ResourceStat[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [expanded,  setExpanded]  = useState<Set<string>>(new Set());
@@ -1196,8 +1196,8 @@ export default function ReportsPage() {
   const applyPreset = (p: Preset) => {
     setPreset(p);
     setExpanded(new Set());
-    if (p === 'week')  { const r = getWeekRange();  setStartDate(r.start); setEndDate(r.end); }
-    if (p === 'month') { const r = getMonthRange(); setStartDate(r.start); setEndDate(r.end); }
+    if (p === 'week')   { const r = getWeekRange();   setStartDate(r.start); setEndDate(r.end); }
+    if (p === 'last30') { const r = getLast30Range(); setStartDate(r.start); setEndDate(r.end); }
   };
 
   const fetchAnalytics = useCallback(async () => {
@@ -1332,7 +1332,7 @@ export default function ReportsPage() {
                 style={preset === p
                   ? { background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', color: '#fff' }
                   : { border: t.border, color: t.textMuted, background: 'transparent' }}>
-                {p === 'week' ? 'This Week' : p === 'month' ? 'This Month' : 'Custom'}
+                {p === 'week' ? 'This Week' : p === 'last30' ? 'Last 30 Days' : 'Custom'}
               </button>
             ))}
           </div>
