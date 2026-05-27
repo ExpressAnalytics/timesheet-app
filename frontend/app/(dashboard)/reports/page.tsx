@@ -651,10 +651,10 @@ function EpicRow({ epic, isOpen, onToggle, openMembers, onToggleMember, openTask
         <tr>
           <td colSpan={7} style={{ background: t.cardBg2, padding: 0 }}>
             <div className="px-8 py-4 space-y-4">
-              {epic.members.length === 0 ? (
+              {epic.members.filter(m => m.total_logged > 0).length === 0 ? (
                 <p className="text-sm" style={{ color: t.textSubtle }}>No members assigned.</p>
               ) : (
-                epic.members.map((member) => (
+                epic.members.filter(m => m.total_logged > 0).map((member) => (
                   <MemberRow
                     key={member.user_id}
                     member={member}
