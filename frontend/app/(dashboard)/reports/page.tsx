@@ -565,7 +565,6 @@ function EpicRow({ epic, isOpen, onToggle, openMembers, onToggleMember, openTask
   const est     = epic.total_est_hours != null ? Number(epic.total_est_hours) : null;
   const pct     = epic.pct_complete ?? (est && est > 0 ? Math.min(100, Math.round((logged / est) * 100)) : 0);
   const barColor = pct >= 100 ? '#10b981' : pct >= 75 ? '#3b82f6' : pct >= 40 ? '#f59e0b' : '#ef4444';
-  const isGeneral = epic.epic_key === 'GENERAL';
 
   return (
     <>
@@ -959,7 +958,7 @@ function SpaceSection({
             </tr>
           </thead>
           <tbody>
-            {space.epics.map((epic) => {
+            {space.epics.filter(e => e.total_logged_hours > 0).map((epic) => {
               const epicId = `${space.space_key}::${epic.epic_key ?? '__none__'}`;
               return (
                 <EpicRow
@@ -1022,7 +1021,7 @@ function GeneralSection({ general, openMembers, onToggleMember, openTasks, onTog
       </div>
       {open && (
         <div className="px-8 py-4 space-y-4">
-          {general.members.map((member) => (
+          {general.members.filter(m => m.total_logged > 0).map((member) => (
             <MemberRow
               key={member.user_id}
               member={member}
