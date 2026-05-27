@@ -1326,7 +1326,7 @@ export default function ReportsPage() {
 
           {/* preset buttons */}
           <div className="flex items-center gap-2">
-            {(['week', 'month', 'custom'] as Preset[]).map((p) => (
+            {(['week', 'last30', 'custom'] as Preset[]).map((p) => (
               <button key={p} onClick={() => applyPreset(p)}
                 className="px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize"
                 style={preset === p
