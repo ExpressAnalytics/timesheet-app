@@ -526,7 +526,7 @@ export default function InsightsPage() {
       ...space,
       epics: space.epics.filter(e =>
         tab === 'active'
-          ? !isDone(e.epic_status)
+          ? !isDone(e.epic_status) && e.total_logged_hours > 0
           : isDone(e.epic_status) && e.total_logged_hours > 0
       ),
     }))
@@ -671,7 +671,7 @@ export default function InsightsPage() {
               </div>
             )}
 
-            {filteredSpaces.length === 0 ? (
+            {!loading && epicData !== null && filteredSpaces.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-56 rounded-2xl gap-4"
                 style={{ background: t.cardBg, border: t.border }}>
                 <div className="inline-flex w-12 h-12 items-center justify-center rounded-2xl animate-float"
