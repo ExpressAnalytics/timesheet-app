@@ -252,9 +252,23 @@ export default function TimesheetPage() {
   const authUser = useAuthStore((s) => s.user);
   const isAdmin  = authUser?.role === 'admin';
   const myUserId = authUser?.id ?? '';
-  const today          = localDateStr(new Date());
-  // 3 working days back — undefined for admin (no restriction)
-  const minAllowedDate = isAdmin ? undefined : addWorkingDays(new Date(), 3, -1);
+  const today = localDateStr(new Date());
+
+  // ── calendar access (extended date range) ─────────────────────────────────
+  const [calAccess, setCalAccess] = useState<{
+    enabled: boolean;
+    expires_at_ist?: string | null;
+    min_date?: string | null;
+    max_date?: string | null;
+  } | null>(null);
+
+  // 3 working days back — undefined for admin; extended to 15 back/10 forward when access granted
+  const minAllowedDate = isAdmin ? undefined
+    : calAccess?.enabled && calAccess.min_date ? calAccess.min_date
+    : addWorkingDays(new Date(), 3, -1);
+  const maxAllowedDate = isAdmin ? undefined
+    : calAccess?.enabled && calAccess.max_date ? calAccess.max_date
+    : today;
 
   // ── cache store ──────────────────────────────────────────────────────────
   const selectedDate    = useTimesheetStore((s) => s.selectedDate);
@@ -394,6 +408,11 @@ export default function TimesheetPage() {
       fetch(`${API}/timesheet/unlocked-dates`, { headers: authHeaders(token) })
         .then((r) => r.ok ? r.json() : { dates: [] })
         .then((d) => setUnlockedDates(d.dates ?? []));
+
+      // Fetch extended calendar access (if granted by admin)
+      fetch(`${API}/users/me/calendar-access`, { headers: authHeaders(token) })
+        .then((r) => r.ok ? r.json() : null)
+        .then((d) => d && setCalAccess(d));
     }
 
     // All users need the user list — admins for the header selector, everyone for Assisted Task tab.
@@ -662,7 +681,7 @@ export default function TimesheetPage() {
           )}
           <input type="date" value={selectedDate}
             min={minAllowedDate}
-            max={isAdmin ? undefined : today}
+            max={maxAllowedDate}
             onChange={(e) => handleDateChange(e.target.value)}
             className="px-4 py-2 rounded-lg text-sm focus:outline-none"
             style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, colorScheme: t.colorScheme }} />
@@ -680,6 +699,26 @@ export default function TimesheetPage() {
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
             </svg>
             {syncMsg}
+          </div>
+        )}
+
+        {/* Extended calendar access banner */}
+        {!isAdmin && calAccess?.enabled && (
+          <div className="flex items-start gap-3 px-4 py-3.5 rounded-xl"
+            style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.3)' }}>
+            <svg className="w-5 h-5 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none"
+              stroke="#8b5cf6" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: '#8b5cf6' }}>Extended Calendar Access Active</p>
+              <p className="text-xs mt-0.5" style={{ color: t.textMuted }}>
+                You can log entries from <strong>{calAccess.min_date}</strong> to <strong>{calAccess.max_date}</strong>.{' '}
+                Expires: <strong>{calAccess.expires_at_ist}</strong>.
+              </p>
+            </div>
           </div>
         )}
 
@@ -1126,7 +1165,7 @@ export default function TimesheetPage() {
                   <label className="block text-sm font-medium mb-1.5" style={{ color: t.textMuted }}>Date</label>
                   <input type="date" value={logDate}
                     min={isUnlockedDate(logDate) ? logDate : minAllowedDate}
-                    max={isAdmin ? undefined : today}
+                    max={maxAllowedDate}
                     onChange={(e) => setLogDate(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none"
                     style={{ background: t.inputBg, border: `1px solid ${t.inputBorder}`, color: t.text, colorScheme: t.colorScheme }} />

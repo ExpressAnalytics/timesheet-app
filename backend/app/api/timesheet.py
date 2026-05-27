@@ -27,7 +27,16 @@ def _get_min_allowed_date() -> date:
     d = today
     while count < 3:
         d -= timedelta(days=1)
-        if d.weekday() < 5:   # 0=Mon … 4=Fri
+        if d.weekday() < 5:
+            count += 1
+    return d
+
+
+def _add_working_days(d: date, n: int, direction: int) -> date:
+    count = 0
+    while count < n:
+        d += timedelta(days=direction)
+        if d.weekday() < 5:
             count += 1
     return d
 
@@ -73,19 +82,39 @@ async def add_entry(body: TimesheetEntryCreate, current_user: dict = Depends(get
         has_manager = bool(user_record and user_record.get("manager_id"))
         initial_status = "pending" if has_manager else "approved"
 
-    # Non-admin: enforce 3-working-day lookback restriction
+    # Non-admin: enforce date restriction (extended if calendar access is active)
     if role != "admin":
-        min_date = _get_min_allowed_date()
-        today    = date.today()
+        import datetime as _dt_mod
+        today   = date.today()
+        now_utc = _dt_mod.datetime.now(_dt_mod.timezone.utc)
+
+        cal_enabled = bool(user_record and user_record.get("calendar_access_enabled"))
+        cal_expires = user_record.get("calendar_access_expires_at") if user_record else None
+
+        has_extended = False
+        if cal_enabled and cal_expires:
+            exp_dt = cal_expires if getattr(cal_expires, "tzinfo", None) \
+                     else cal_expires.replace(tzinfo=_dt_mod.timezone.utc)
+            has_extended = exp_dt > now_utc
+
+        if has_extended:
+            min_date = _add_working_days(today, 15, -1)
+            max_date = _add_working_days(today, 10,  1)
+        else:
+            min_date = _get_min_allowed_date()
+            max_date = today
+
         if body.entry_date < min_date:
-            # Bypass if this date is unlocked (has a rejected entry)
             if not queries.has_rejected_entry_on_date(user_id, str(body.entry_date)):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Cannot log time more than 3 working days back. Earliest allowed date: {min_date}",
+                    detail=f"Cannot log time for this date. Earliest allowed: {min_date}",
                 )
-        if body.entry_date > today + timedelta(days=1):
-            raise HTTPException(status_code=400, detail="Cannot log time for future dates")
+        if body.entry_date > max_date:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot log time for this date. Latest allowed: {max_date}",
+            )
 
     row = queries.create_entry(
         user_id=user_id,

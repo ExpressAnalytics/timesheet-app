@@ -228,6 +228,8 @@ def get_all_users_with_details() -> list:
         SELECT u.user_id, u.email, u.full_name, u.role, u.avatar, u.manager_id,
                COALESCE(u.google_auth_enabled, false)          AS google_auth_enabled,
                COALESCE(u.email_notifications_enabled, true)   AS email_notifications_enabled,
+               COALESCE(u.calendar_access_enabled, false)      AS calendar_access_enabled,
+               u.calendar_access_expires_at,
                m.full_name AS manager_name,
                (SELECT COUNT(*) FROM users r
                 WHERE r.manager_id = u.user_id AND r.is_active = true) AS resource_count
@@ -877,3 +879,22 @@ def get_unfilled_weekdays(user_id: str, from_date: str, to_date: str) -> list:
                 result.append({"date": ds, "hours": round(hours, 2)})
         cur += timedelta(days=1)
     return result
+
+
+# ── Calendar access ────────────────────────────────────────────────────────────
+
+def set_calendar_access(user_id: str, enabled: bool, expires_at=None):
+    execute_query(
+        "UPDATE users SET calendar_access_enabled = %s, calendar_access_expires_at = %s WHERE user_id = %s",
+        (enabled, expires_at, user_id), fetch_all=False,
+    )
+
+
+def revoke_expired_calendar_accesses():
+    """Revoke calendar access for all users whose expires_at has passed."""
+    execute_query(
+        """UPDATE users
+           SET calendar_access_enabled = false, calendar_access_expires_at = null
+           WHERE calendar_access_enabled = true AND calendar_access_expires_at < NOW()""",
+        fetch_all=False,
+    )

@@ -155,6 +155,13 @@ def run_evening_job() -> dict:
     return {"status": "done", "sent": sent, "skipped": skipped, "failed": failed, "errors": errors}
 
 
+def run_revoke_calendar_access_job():
+    """Every 30 minutes: revoke expired calendar access grants."""
+    from app.db import queries
+    queries.revoke_expired_calendar_accesses()
+    print("[scheduler] Calendar access revoke job ran.")
+
+
 def run_weekly_summary_job() -> dict:
     """Post current week's hours summary (Mon to today) to the shared Chat space."""
     from datetime import datetime
@@ -215,6 +222,13 @@ def start():
     s = get_notification_settings()
     reschedule(s.get("morning_time", "09:30"), s.get("evening_time", "22:00"))
     reschedule_weekly(s.get("weekly_day", "mon"), s.get("weekly_time", "09:00"))
+    scheduler.add_job(
+        run_revoke_calendar_access_job,
+        CronTrigger(minute="*/30"),
+        id="revoke_calendar_access",
+        replace_existing=True,
+        name="Revoke expired calendar access (every 30 min)",
+    )
     if not scheduler.running:
         scheduler.start()
     print("[scheduler] Started.")

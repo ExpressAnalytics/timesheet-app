@@ -197,6 +197,38 @@ def send_dm(user_email: str, name: str, today: str,
         return False
 
 
+def send_calendar_access_dm(user_email: str, name: str, start_date: str,
+                           end_date: str, expires_at_str: str) -> bool:
+    """Notify user that admin has granted extended calendar access."""
+    service = _get_chat_service()
+    if not service:
+        print("[chat] Service account not configured — skipping calendar access DM.")
+        return False
+    space_name = _dm_space_name(service, user_email)
+    if not space_name:
+        return False
+
+    start_fmt = date.fromisoformat(start_date).strftime("%a, %d %b %Y")
+    end_fmt   = date.fromisoformat(end_date).strftime("%a, %d %b %Y")
+    app_url   = "https://timesync.expressanalytics.com/timesheet"
+
+    text = (
+        f"*Hi {name}!* 👋\n\n"
+        f"*Admin has granted you Extended Calendar Access.*\n\n"
+        f"📅 You can now fill, edit, and delete timesheet entries from *{start_fmt}* to *{end_fmt}*.\n\n"
+        f"⏰ This access will automatically expire on *{expires_at_str}*.\n\n"
+        f"⚠️ _Access is revoked automatically after 24 hours._\n\n"
+        f"👉 <{app_url}|Open TimeSync>"
+    )
+    try:
+        service.spaces().messages().create(parent=space_name, body={"text": text}).execute()
+        print(f"[chat] Calendar access DM sent → {user_email}")
+        return True
+    except Exception as e:
+        print(f"[chat] Calendar access DM failed for {user_email}: {e}")
+        return False
+
+
 def send_dm_morning(user_email: str, name: str, today_str: str,
                     focus_day: Dict, remaining_gaps: List[Dict]) -> bool:
     service = _get_chat_service()

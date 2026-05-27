@@ -1,8 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
+from datetime import date, datetime, timezone, timedelta
+import pytz
 from app.core.security import get_current_user
 from app.db import queries
+
+_IST = pytz.timezone("Asia/Kolkata")
+
+
+def _add_working_days(d: date, n: int, direction: int) -> date:
+    count = 0
+    while count < n:
+        d += timedelta(days=direction)
+        if d.weekday() < 5:
+            count += 1
+    return d
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -178,6 +191,92 @@ class ConfigureUserBody(BaseModel):
     role: str
     manager_id: Optional[str] = None
     resource_ids: List[str] = []   # users to place under this user (teamlead only)
+
+
+class CalendarAccessBody(BaseModel):
+    enabled: bool
+
+
+@router.get("/me/calendar-access")
+async def get_my_calendar_access(current_user: dict = Depends(get_current_user)):
+    """Return current user's calendar access status and computed date range."""
+    user_record = queries.get_user_by_id(current_user["sub"])
+    if not user_record:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    enabled  = bool(user_record.get("calendar_access_enabled"))
+    expires  = user_record.get("calendar_access_expires_at")
+    now_utc  = datetime.now(timezone.utc)
+
+    if enabled and expires:
+        exp_dt = expires if getattr(expires, "tzinfo", None) else expires.replace(tzinfo=timezone.utc)
+        if exp_dt <= now_utc:
+            queries.set_calendar_access(current_user["sub"], False, None)
+            return {"enabled": False, "expires_at": None, "expires_at_ist": None,
+                    "min_date": None, "max_date": None}
+
+        today    = date.today()
+        min_date = _add_working_days(today, 15, -1)
+        max_date = _add_working_days(today, 10, 1)
+        exp_ist  = exp_dt.astimezone(_IST)
+        return {
+            "enabled":        True,
+            "expires_at":     exp_dt.isoformat(),
+            "expires_at_ist": exp_ist.strftime("%a, %d %b %Y at %I:%M %p IST"),
+            "min_date":       str(min_date),
+            "max_date":       str(max_date),
+        }
+
+    return {"enabled": False, "expires_at": None, "expires_at_ist": None,
+            "min_date": None, "max_date": None}
+
+
+@router.patch("/{user_id}/calendar-access")
+async def toggle_calendar_access(
+    user_id: str,
+    body: CalendarAccessBody,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin only: grant (24 h) or immediately revoke extended calendar access."""
+    require_admin(current_user)
+
+    if not body.enabled:
+        queries.set_calendar_access(user_id, False, None)
+        return {"user_id": user_id, "calendar_access_enabled": False,
+                "calendar_access_expires_at": None}
+
+    now_utc    = datetime.now(timezone.utc)
+    expires_at = now_utc + timedelta(hours=24)
+
+    queries.set_calendar_access(user_id, True, expires_at)
+
+    today      = date.today()
+    start_date = _add_working_days(today, 15, -1)
+    end_date   = _add_working_days(today, 10,  1)
+    exp_ist    = expires_at.astimezone(_IST)
+    expires_str = exp_ist.strftime("%a, %d %b %Y at %I:%M %p IST")
+
+    user_record = queries.get_user_by_id(user_id)
+    if user_record:
+        from app.services.chat_service import send_calendar_access_dm
+        background_tasks.add_task(
+            send_calendar_access_dm,
+            user_email    = user_record["email"],
+            name          = user_record["full_name"],
+            start_date    = str(start_date),
+            end_date      = str(end_date),
+            expires_at_str = expires_str,
+        )
+
+    return {
+        "user_id":                    user_id,
+        "calendar_access_enabled":    True,
+        "calendar_access_expires_at": expires_at.isoformat(),
+        "start_date":                 str(start_date),
+        "end_date":                   str(end_date),
+        "expires_at_ist":             expires_str,
+    }
 
 
 @router.put("/{user_id}/configure")

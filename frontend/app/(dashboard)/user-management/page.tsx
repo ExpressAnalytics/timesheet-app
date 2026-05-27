@@ -21,6 +21,8 @@ interface User {
   resource_count: number;
   google_auth_enabled: boolean;
   email_notifications_enabled: boolean;
+  calendar_access_enabled: boolean;
+  calendar_access_expires_at: string | null;
 }
 
 function RoleBadge({ role }: { role: string }) {
@@ -513,14 +515,69 @@ function EmailToggle({ user, token, onChange }: {
   );
 }
 
+function CalendarAccessToggle({ user, token, onChange }: {
+  user: User; token: string; onChange: (uid: string, val: boolean, expiresAt: string | null) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const on = user.calendar_access_enabled ?? false;
+
+  if (user.role === 'admin') return <span style={{ color: t.textSubtle }}>—</span>;
+
+  const expiresAt = user.calendar_access_expires_at;
+  const now = new Date();
+  const isActive = on && expiresAt && new Date(expiresAt) > now;
+
+  const handleToggle = async () => {
+    if (loading) return;
+    setLoading(true);
+    const next = !on;
+    try {
+      const res = await fetch(`${API}/users/${user.user_id}/calendar-access`, {
+        method: 'PATCH', headers: authHeaders(token),
+        body: JSON.stringify({ enabled: next }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onChange(user.user_id, next, data.calendar_access_expires_at ?? null);
+      }
+    } finally { setLoading(false); }
+  };
+
+  const expiresLabel = isActive
+    ? (() => {
+        const diff = Math.round((new Date(expiresAt!).getTime() - now.getTime()) / 60000);
+        if (diff < 60) return `${diff}m left`;
+        return `${Math.floor(diff / 60)}h left`;
+      })()
+    : null;
+
+  return (
+    <button onClick={handleToggle} disabled={loading}
+      title={isActive ? `Active — expires in ${expiresLabel}` : 'Grant 24-hour extended calendar access'}
+      className="flex items-center gap-2 transition-opacity disabled:opacity-40"
+      style={{ opacity: loading ? 0.5 : 1 }}>
+      <div className="relative w-9 h-5 rounded-full transition-colors"
+        style={{ background: isActive ? '#8b5cf6' : '#374151' }}>
+        <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
+          style={{ left: isActive ? '18px' : '2px' }} />
+      </div>
+      <span className="text-xs font-medium" style={{ color: isActive ? '#8b5cf6' : t.textSubtle }}>
+        {loading ? '…' : isActive ? expiresLabel ?? 'On' : 'Off'}
+      </span>
+    </button>
+  );
+}
+
 // ── User table section (by role) ──────────────────────────────────────────────
 function UserSection({
-  title, users, allUsers, token, currentUserId, onEdit, onUnassigned, showMembers, onGoogleToggle, onEmailToggle,
+  title, users, allUsers, token, currentUserId, onEdit, onUnassigned, showMembers,
+  onGoogleToggle, onEmailToggle, onCalendarToggle,
 }: {
   title: string; users: User[]; allUsers: User[]; token: string; currentUserId: string;
   onEdit: (u: User) => void; onUnassigned: (uid: string) => void; showMembers: boolean;
-  onGoogleToggle: (uid: string, val: boolean) => void;
-  onEmailToggle:  (uid: string, val: boolean) => void;
+  onGoogleToggle:    (uid: string, val: boolean) => void;
+  onEmailToggle:     (uid: string, val: boolean) => void;
+  onCalendarToggle:  (uid: string, val: boolean, expiresAt: string | null) => void;
 }) {
   if (users.length === 0) return null;
   return (
@@ -533,10 +590,10 @@ function UserSection({
         </span>
       </div>
       <div className="overflow-x-auto">
-      <table className="w-full text-sm" style={{ minWidth: 680 }}>
+      <table className="w-full text-sm" style={{ minWidth: 780 }}>
         <thead style={{ background: t.tableHead }}>
           <tr>
-            {['User', 'Email', 'Role', showMembers ? 'Members' : 'Manager', 'Google Auth', 'Email Notif', 'Configure'].map((h) => (
+            {['User', 'Email', 'Role', showMembers ? 'Members' : 'Manager', 'Google Auth', 'Email Notif', 'Cal Access', 'Configure'].map((h) => (
               <th key={h} className="px-5 py-3 text-left font-semibold"
                 style={{ color: t.textHeader, borderBottom: t.border, fontSize: 11,
                   textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -575,6 +632,9 @@ function UserSection({
               </td>
               <td className="px-5 py-3.5">
                 <EmailToggle user={user} token={token} onChange={onEmailToggle} />
+              </td>
+              <td className="px-5 py-3.5">
+                <CalendarAccessToggle user={user} token={token} onChange={onCalendarToggle} />
               </td>
               <td className="px-5 py-3.5">
                 <button onClick={() => onEdit(user)}
@@ -629,6 +689,14 @@ export default function UserManagementPage() {
   const handleEmailToggle = (uid: string, val: boolean) => {
     setUsers((prev) => prev.map((u) =>
       u.user_id === uid ? { ...u, email_notifications_enabled: val } : u,
+    ));
+  };
+
+  const handleCalendarToggle = (uid: string, val: boolean, expiresAt: string | null) => {
+    setUsers((prev) => prev.map((u) =>
+      u.user_id === uid
+        ? { ...u, calendar_access_enabled: val, calendar_access_expires_at: expiresAt }
+        : u,
     ));
   };
 
@@ -927,16 +995,19 @@ export default function UserManagementPage() {
               title="Admins" users={admins} allUsers={users} token={token}
               currentUserId={me.id} onEdit={setEditing} onUnassigned={handleUnassigned}
               showMembers onGoogleToggle={handleGoogleToggle} onEmailToggle={handleEmailToggle}
+              onCalendarToggle={handleCalendarToggle}
             />
             <UserSection
               title="Teamleads" users={teamleads} allUsers={users} token={token}
               currentUserId={me.id} onEdit={setEditing} onUnassigned={handleUnassigned}
               showMembers onGoogleToggle={handleGoogleToggle} onEmailToggle={handleEmailToggle}
+              onCalendarToggle={handleCalendarToggle}
             />
             <UserSection
               title="Resources" users={resources} allUsers={users} token={token}
               currentUserId={me.id} onEdit={setEditing} onUnassigned={handleUnassigned}
               showMembers={false} onGoogleToggle={handleGoogleToggle} onEmailToggle={handleEmailToggle}
+              onCalendarToggle={handleCalendarToggle}
             />
           </>
         )}
