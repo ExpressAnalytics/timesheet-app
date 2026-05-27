@@ -20,7 +20,12 @@ def bust(prefix: str):
         del _cache[k]
 
 def find_user_by_email(email: str) -> Optional[Dict[str, Any]]:
-    query = "SELECT * FROM users WHERE email = %s"
+    query = """
+        SELECT u.*, m.full_name AS manager_name
+        FROM users u
+        LEFT JOIN users m ON m.user_id = u.manager_id
+        WHERE u.email = %s
+    """
     return execute_query(query, (email,), fetch_one=True)
 
 def create_user(email: str, full_name: str, role: str = 'resource') -> Dict[str, Any]:
@@ -35,7 +40,12 @@ def create_user(email: str, full_name: str, role: str = 'resource') -> Dict[str,
     return find_user_by_email(email)
 
 def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
-    query = "SELECT * FROM users WHERE user_id = %s"
+    query = """
+        SELECT u.*, m.full_name AS manager_name
+        FROM users u
+        LEFT JOIN users m ON m.user_id = u.manager_id
+        WHERE u.user_id = %s
+    """
     return execute_query(query, (user_id,), fetch_one=True)
 
 

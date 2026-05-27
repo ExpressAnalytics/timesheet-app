@@ -11,6 +11,7 @@ class UserResponse(BaseModel):
     role: str
     avatar: Optional[str] = None
     manager_id: Optional[str] = None
+    manager_name: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str

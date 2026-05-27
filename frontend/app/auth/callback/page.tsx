@@ -10,13 +10,14 @@ function AuthCallbackInner() {
   const { setUser, setToken } = useAuthStore();
 
   useEffect(() => {
-    const token      = searchParams.get('token');
-    const user_id    = searchParams.get('user_id');
-    const email      = searchParams.get('email');
-    const name       = searchParams.get('name');
-    const role       = searchParams.get('role');
-    const avatar     = searchParams.get('avatar') ?? '';
-    const manager_id = searchParams.get('manager_id') ?? null;
+    const token        = searchParams.get('token');
+    const user_id      = searchParams.get('user_id');
+    const email        = searchParams.get('email');
+    const name         = searchParams.get('name');
+    const role         = searchParams.get('role');
+    const avatar       = searchParams.get('avatar') ?? '';
+    const manager_id   = searchParams.get('manager_id') ?? null;
+    const manager_name = searchParams.get('manager_name') ?? null;
 
     if (!token || !user_id || !email || !name || !role) {
       router.replace('/login?error=google_failed');
@@ -25,12 +26,13 @@ function AuthCallbackInner() {
 
     setToken(token);
     setUser({
-      id:         user_id,
+      id:           user_id,
       email,
       name,
-      role:       role as 'admin' | 'teamlead' | 'resource',
+      role:         role as 'admin' | 'teamlead' | 'resource',
       avatar,
-      manager_id: manager_id || null,
+      manager_id:   manager_id || null,
+      manager_name: manager_name || null,
     });
 
     router.replace('/timesheet');

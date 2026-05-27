@@ -161,13 +161,14 @@ async def google_callback(code: str = None, error: str = None):
     )
 
     params = urllib.parse.urlencode({
-        "token":      access_token,
-        "user_id":    db_user["user_id"],
-        "email":      db_user["email"],
-        "name":       db_user["full_name"],
-        "role":       db_user["role"],
-        "avatar":     db_user.get("avatar") or "",
-        "manager_id": db_user.get("manager_id") or "",
+        "token":        access_token,
+        "user_id":      db_user["user_id"],
+        "email":        db_user["email"],
+        "name":         db_user["full_name"],
+        "role":         db_user["role"],
+        "avatar":       db_user.get("avatar") or "",
+        "manager_id":   db_user.get("manager_id") or "",
+        "manager_name": db_user.get("manager_name") or "",
     })
     return RedirectResponse(f"{frontend}/auth/callback?{params}")
 

@@ -591,6 +591,9 @@ export default function Sidebar() {
           </div>
           <div className="flex-1 min-w-0 leading-tight">
             <p className="text-[13px] font-medium text-zinc-900 truncate">{user?.name || 'User'}</p>
+            {user?.manager_name && (
+              <p className="text-[10px] text-zinc-400 truncate">→ {user.manager_name}</p>
+            )}
             <p className="text-[10.5px] font-semibold tracking-[0.06em] text-zinc-500 uppercase">
               {user?.role || 'resource'}
             </p>
