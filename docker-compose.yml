@@ -1,0 +1,45 @@
+# Backend deployment stack: FastAPI (uvicorn) behind Caddy (auto-HTTPS).
+# Frontend is hosted separately on Vercel.
+#
+#   cp backend/.env.example backend/.env   # then fill in real values
+#   docker compose up -d --build
+#
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      ENVIRONMENT: production
+    restart: unless-stopped
+    # Internal-only: reachable by Caddy on the compose network, not the host.
+    # Uncomment to expose for local debugging:
+    # ports:
+    #   - "127.0.0.1:8000:8000"
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3 (QUIC)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # issued certs + ACME account — persist across restarts
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,23 @@
+# Caddy reverse proxy for the TimeSync API.
+# Caddy provisions and renews a Let's Encrypt cert automatically for the
+# domain below (requires the domain's A/AAAA record to point at this host and
+# inbound 80/443 to be reachable).
+{
+	# ACME account contact. Caddy registers exactly ONE email.
+	email ajmal.aksar@expressanalytics.net
+	# Secondary contact (not registered with the CA): kiran@expressanalytics.net
+}
+
+timesyncapi.expressanalytics.com {
+	encode zstd gzip
+
+	# Proxy everything to the FastAPI container on the private compose network.
+	# Caddy sets X-Forwarded-For / -Proto / -Host automatically, which uvicorn
+	# honors via --proxy-headers.
+	reverse_proxy backend:8000
+
+	log {
+		output stdout
+		format console
+	}
+}

@@ -1,0 +1,15 @@
+# Virtualenvs / caches
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Secrets — injected at runtime via compose env_file / env vars, never baked in
+.env
+service-account.json
+
+# Local cruft / docs not needed in the image
+.python-version
+*.md
+.DS_Store
