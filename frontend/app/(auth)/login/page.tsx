@@ -166,10 +166,10 @@ function LoginForm() {
           <p className="text-[12.5px] text-zinc-500">
             Trouble signing in? Email{' '}
             <a
-              href="mailto:admin@expressanalytics.net"
+              href="mailto:kiran@expressanalytics.net"
               className="font-medium text-[var(--accent)] underline-offset-4 hover:underline"
             >
-              admin@expressanalytics.net
+              kiran@expressanalytics.net
             </a>
           </p>
         </div>
