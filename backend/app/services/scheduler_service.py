@@ -3,7 +3,7 @@ from apscheduler.triggers.cron import CronTrigger
 from datetime import timedelta
 import pytz
 
-APP_START_DATE = "2026-05-08"   # no reminders for dates before this
+APP_START_DATE = "2026-06-01"   # no reminders for dates before this
 IST_TZ         = "Asia/Kolkata"
 _IST           = pytz.timezone(IST_TZ)
 
